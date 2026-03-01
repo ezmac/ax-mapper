@@ -1,14 +1,13 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
-
-// Gate: 2 standing cones, 40 units apart (≈ ~12 ft at default scale)
-const GATE_HALF = 20
+import { coneSettings } from '../settings'
 
 export class GateTool extends BaseConeStampTool {
   static override id = 'gate'
+  protected override widthStep() { return coneSettings.size }
   protected layout() {
     return [
-      { coneType: 'standing' as const, ox: -GATE_HALF, oy: 0 },
-      { coneType: 'standing' as const, ox: GATE_HALF, oy: 0 },
+      { coneType: 'standing' as const, ox: -this.gateHalf, oy: 0 },
+      { coneType: 'standing' as const, ox:  this.gateHalf, oy: 0 },
     ]
   }
 }

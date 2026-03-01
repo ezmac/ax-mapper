@@ -22,8 +22,6 @@ export interface LayoutEntry {
 
 export interface GhostEntry {
   id: TLShapeId
-  offsetX: number
-  offsetY: number
   rotOffset: number
 }
 
@@ -34,7 +32,19 @@ export abstract class BaseConeStampTool extends StateNode {
   protected ghostIds: GhostEntry[] = []
   protected ghostRotation = 0
 
+  /**
+   * Half-width of gate-like tools. Persists between activations so the user's
+   * last-set width is remembered. Gate tools reference this in layout().
+   */
+  protected gateHalf = 20
+
   protected abstract layout(): LayoutEntry[]
+
+  /**
+   * Return a non-zero step to enable ↑/↓ width adjustment for gate-like tools.
+   * 0 (default) means ↑/↓ does nothing.
+   */
+  protected widthStep(): number { return 0 }
 
   private get sz() { return coneSettings.size }
 
@@ -82,11 +92,10 @@ export abstract class BaseConeStampTool extends StateNode {
     //   x = cursorX + orbX - (cos*ax - sin*ay)
     //   y = cursorY + orbY - (sin*ax + cos*ay)
 
-    // Anchor in local space: centre of the shape.
     const ax = w / 2
     const ay = h / 2
 
-    // Orbital offset for compound layouts (rotated by ghostRotation, not totalRot).
+    // Orbital offset rotated by ghostRotation (not totalRot).
     const [orbX, orbY] = rotate(ox, oy, this.ghostRotation)
 
     return {
@@ -95,26 +104,40 @@ export abstract class BaseConeStampTool extends StateNode {
     }
   }
 
-  private createGhosts() {
-    const { x, y } = this.editor.inputs.getCurrentPagePoint()
-    this.ghostIds = []
+  private createGhostsAt(pageX: number, pageY: number) {
+    this.deleteGhosts()
     for (const entry of this.layout()) {
       const id = createShapeId()
       const rotOffset = entry.rotOffset ?? 0
-      const pos = this.shapePos(x, y, entry.ox, entry.oy, entry.coneType, rotOffset)
+      const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy, entry.coneType, rotOffset)
       this.editor.createShape(
         this.makeShapePartial(id, entry, pos.x, pos.y, true)
       )
-      this.ghostIds.push({ id, offsetX: entry.ox, offsetY: entry.oy, rotOffset })
+      this.ghostIds.push({ id, rotOffset })
     }
   }
 
-  private updateGhosts(pageX: number, pageY: number) {
+  private createGhosts() {
+    const { x, y } = this.editor.inputs.getCurrentPagePoint()
+    this.createGhostsAt(x, y)
+  }
+
+  // Protected so gate-like subclasses can call it after adjusting gateHalf.
+  protected updateGhosts(pageX: number, pageY: number) {
     const layout = this.layout()
+
+    // If the count changed (e.g. pointer-pair count switched while tool was active),
+    // recreate all ghosts rather than updating mismatched entries.
+    if (layout.length !== this.ghostIds.length) {
+      this.createGhostsAt(pageX, pageY)
+      return
+    }
+
     for (let i = 0; i < this.ghostIds.length; i++) {
       const ghost = this.ghostIds[i]
       const entry = layout[i]
-      const pos = this.shapePos(pageX, pageY, ghost.offsetX, ghost.offsetY, entry.coneType, ghost.rotOffset)
+      // Use entry.ox/oy from the CURRENT layout() so dynamic layouts update correctly.
+      const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy, entry.coneType, ghost.rotOffset)
       const { w, h } = this.dims(entry.coneType)
       this.editor.updateShape({
         id: ghost.id,
@@ -150,11 +173,23 @@ export abstract class BaseConeStampTool extends StateNode {
   }
 
   override onKeyDown(info: TLKeyboardEventInfo) {
-    if (info.key !== 'ArrowLeft' && info.key !== 'ArrowRight') return
-    const step = info.shiftKey ? STEP_FINE : STEP_NORMAL
-    this.ghostRotation += info.key === 'ArrowRight' ? step : -step
     const { x, y } = this.editor.inputs.getCurrentPagePoint()
-    this.updateGhosts(x, y)
+
+    if (info.key === 'ArrowLeft' || info.key === 'ArrowRight') {
+      const step = info.shiftKey ? STEP_FINE : STEP_NORMAL
+      this.ghostRotation += info.key === 'ArrowRight' ? step : -step
+      this.updateGhosts(x, y)
+      return
+    }
+
+    if (info.key === 'ArrowUp' || info.key === 'ArrowDown') {
+      const ws = this.widthStep()
+      if (ws === 0) return
+      const step = info.shiftKey ? Math.max(1, Math.round(ws / 4)) : ws
+      this.gateHalf += info.key === 'ArrowUp' ? step : -step
+      this.gateHalf = Math.max(this.gateHalf, Math.ceil(this.sz / 2))
+      this.updateGhosts(x, y)
+    }
   }
 
   override onPointerDown(info: TLPointerEventInfo) {
