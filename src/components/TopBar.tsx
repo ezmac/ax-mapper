@@ -1,5 +1,7 @@
 import type { Editor } from 'tldraw'
 import { exportJSON } from '../utils/exportJSON'
+import { importJSON } from '../utils/importJSON'
+import { coneSettings } from '../settings'
 
 interface TopBarProps {
   scale: number
@@ -54,6 +56,24 @@ export function TopBar({
     const reader = new FileReader()
     reader.onload = (ev) => onImageUpload(ev.target?.result as string)
     reader.readAsDataURL(file)
+    e.target.value = ''
+  }
+
+  function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (ev) => {
+      const editor = getEditor()
+      if (!editor) return
+      try {
+        const data = JSON.parse(ev.target?.result as string)
+        importJSON(editor, data, coneSettings.size)
+      } catch (err) {
+        alert(`Import failed: ${(err as Error).message}`)
+      }
+    }
+    reader.readAsText(file)
     e.target.value = ''
   }
 
@@ -112,6 +132,16 @@ export function TopBar({
       <span style={{ color: '#94a3b8', fontSize: 11, whiteSpace: 'nowrap' }}>
         ← → rotate · Shift+← → fine · Esc = select · Ctrl+Z = undo
       </span>
+
+      <label style={{
+        background: '#334155', color: '#cbd5e1',
+        border: '1px solid #475569', borderRadius: 6,
+        padding: '6px 14px', fontSize: 13, cursor: 'pointer',
+        fontWeight: 600, whiteSpace: 'nowrap', userSelect: 'none',
+      }}>
+        ⬆ Import JSON
+        <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+      </label>
 
       <button
         onClick={handleDownload}

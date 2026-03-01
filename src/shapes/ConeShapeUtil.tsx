@@ -1,4 +1,5 @@
 import { Rectangle2d, SVGContainer, ShapeUtil } from 'tldraw'
+import type { TLResizeInfo } from 'tldraw'
 import type { ConeShape } from '../types/cone'
 import { coneShapeProps } from '../types/cone'
 
@@ -43,7 +44,14 @@ export class ConeShapeUtil extends ShapeUtil<ConeShape> {
     return <rect x={0} y={0} width={w} height={h} fill="none" />
   }
 
-  override canResize() { return false }
+  override canResize() { return true }
+
+  override onResize(shape: ConeShape, info: TLResizeInfo<ConeShape>) {
+    const w = Math.max(3, Math.round(Math.abs(info.scaleX * shape.props.w)))
+    const h = Math.max(3, Math.round(Math.abs(info.scaleY * shape.props.h)))
+    return { x: info.newPoint.x, y: info.newPoint.y, props: { w, h } }
+  }
+
   override hideRotateHandle(_shape: ConeShape) { return false }
 }
 

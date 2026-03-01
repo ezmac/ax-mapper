@@ -16,7 +16,7 @@ interface ExportData {
     ox: number
     oy: number
   }
-  pointer_source: 'orange'
+  pointer_source: 'magenta' | 'orange'
   n_standing: number
   n_pointer: number
   n_green: number
@@ -33,8 +33,6 @@ interface ExportData {
 export function exportJSON(editor: Editor, scaleMetresPerUnit: number): ExportData {
   const shapes = editor.getCurrentPageShapes()
 
-  // tldraw's TLShape union doesn't include custom types by default;
-  // we augmented it via TLGlobalShapePropsMap so 'cone' is valid here.
   const cones = shapes
     .filter((s): s is ConeShape => (s as ConeShape).type === 'cone')
     .filter(s => !s.props.isGhost)
@@ -48,11 +46,17 @@ export function exportJSON(editor: Editor, scaleMetresPerUnit: number): ExportDa
   let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
 
   for (const cone of cones) {
-    // Center of shape in page coordinates
-    const cx = cone.x + cone.props.w / 2
-    const cy = cone.y + cone.props.h / 2
+    // Actual page-space centre: tldraw applies translate(x,y) then rotate(θ) around that
+    // origin, so the centre of the w×h bounding box in page space is:
+    //   cx = cos(θ)·w/2 − sin(θ)·h/2 + x
+    //   cy = sin(θ)·w/2 + cos(θ)·h/2 + y
+    const θ  = cone.rotation ?? 0
+    const w  = cone.props.w
+    const h  = cone.props.h
+    const cx = Math.cos(θ) * w / 2 - Math.sin(θ) * h / 2 + cone.x
+    const cy = Math.sin(θ) * w / 2 + Math.cos(θ) * h / 2 + cone.y
 
-    // Convert to Blender space: bx = east, by = north (+Y up)
+    // Convert to Blender space: bx = east, by = north (+Y up, so Y is flipped)
     const bx = cx * scaleMetresPerUnit
     const by = -cy * scaleMetresPerUnit
 
@@ -61,12 +65,12 @@ export function exportJSON(editor: Editor, scaleMetresPerUnit: number): ExportDa
     ymin = Math.min(ymin, by)
     ymax = Math.max(ymax, by)
 
-    const entry: ConeEntry = { bx, by, type: cone.props.coneType, size: 10 }
+    const entry: ConeEntry = { bx, by, type: cone.props.coneType, size: cone.props.h }
 
     if (cone.props.coneType === 'pointer') {
-      // tldraw rotation: radians, CW positive (Y down). Convert to CCW degrees from +X (Blender).
-      const rotRad = cone.rotation ?? 0
-      const facing_deg = ((-rotRad * 180) / Math.PI + 360) % 360
+      // tldraw rotation: radians CW (Y-down screen space).
+      // Blender facing_deg: CCW from +X (east). Flip sign to convert.
+      const facing_deg = ((-θ * 180) / Math.PI + 360) % 360
       entry.facing_deg = Math.round(facing_deg * 100) / 100
       pointers.push(entry)
     } else if (cone.props.coneType === 'standing') {
@@ -86,7 +90,7 @@ export function exportJSON(editor: Editor, scaleMetresPerUnit: number): ExportDa
 
   return {
     transform: { type: 'scale', scale: scaleMetresPerUnit, ox: 0, oy: 0 },
-    pointer_source: 'orange',
+    pointer_source: 'magenta',
     n_standing: standing.length,
     n_pointer: pointers.length,
     n_green: greens.length,
