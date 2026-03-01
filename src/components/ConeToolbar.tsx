@@ -96,9 +96,14 @@ export function ConeToolbar() {
   const [ptrCount, setPtrCount] = useState(1)
   const [coneSize, setConeSize] = useState(coneSettings.size)
 
+  function focusCanvas() {
+    editor.getContainer().focus()
+  }
+
   function activate(toolId: string) {
     editor.setCurrentTool(toolId)
     setActiveTool(toolId)
+    focusCanvas()
   }
 
   function activatePtrPair(n: number) {
@@ -106,6 +111,7 @@ export function ConeToolbar() {
     setPtrCount(n)
     editor.setCurrentTool('pointer-pair')
     setActiveTool('pointer-pair')
+    focusCanvas()
   }
 
   function activateSlalom(n: number) {
@@ -113,6 +119,7 @@ export function ConeToolbar() {
     setSlalomCount(n)
     editor.setCurrentTool('slalom')
     setActiveTool('slalom')
+    focusCanvas()
   }
 
   function handleSizeChange(val: number) {

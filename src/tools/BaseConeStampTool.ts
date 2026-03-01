@@ -194,24 +194,23 @@ export abstract class BaseConeStampTool extends StateNode {
 
   override onPointerDown(info: TLPointerEventInfo) {
     if (info.target !== 'canvas' && info.target !== 'shape') return
-    const { x, y } = this.editor.inputs.getCurrentPagePoint()
-    const layout = this.layout()
-    const rot = this.ghostRotation
+
+    // Read the ghost shapes' actual stored positions so placed cones are
+    // byte-for-byte identical to the preview rather than recomputed.
+    const snapshots = this.ghostIds.map(({ id }) => this.editor.getShape(id))
 
     this.editor.markHistoryStoppingPoint('cone-stamp')
     this.editor.run(() => {
-      for (const entry of layout) {
-        const pos = this.shapePos(x, y, entry.ox, entry.oy, entry.coneType, entry.rotOffset ?? 0)
-        const { w, h } = this.dims(entry.coneType)
-        const id = createShapeId()
-        const rotation = rot + (entry.rotOffset ?? 0)
+      for (const ghost of snapshots) {
+        if (!ghost) continue
+        const g = ghost as any
         this.editor.createShape({
-          id,
+          id: createShapeId(),
           type: 'cone',
-          x: pos.x,
-          y: pos.y,
-          rotation,
-          props: { coneType: entry.coneType, isGhost: false, w, h },
+          x: g.x,
+          y: g.y,
+          rotation: g.rotation ?? 0,
+          props: { ...g.props, isGhost: false },
         } as any)
       }
     })
