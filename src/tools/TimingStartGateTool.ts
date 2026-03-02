@@ -1,0 +1,13 @@
+import { BaseConeStampTool } from './BaseConeStampTool'
+import { coneSettings } from '../settings'
+
+export class TimingStartGateTool extends BaseConeStampTool {
+  static override id = 'timing-start-gate'
+  protected override widthStep() { return coneSettings.size }
+  protected layout() {
+    return [
+      { coneType: 'timing_start' as const, ox: -this.gateHalf, oy: 0 },
+      { coneType: 'timing_start' as const, ox:  this.gateHalf, oy: 0 },
+    ]
+  }
+}

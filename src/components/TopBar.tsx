@@ -12,6 +12,10 @@ interface TopBarProps {
   setSiteH: (h: number) => void
   onImageUpload: (dataUrl: string) => void
   getEditor: () => Editor | null
+  showGrid: boolean
+  setShowGrid: (v: boolean) => void
+  showBackground: boolean
+  setShowBackground: (v: boolean) => void
 }
 
 const inputStyle: React.CSSProperties = {
@@ -45,10 +49,36 @@ function NumInput({ value, onChange, width = 70, step = 1, min = 1 }: {
   )
 }
 
+function ToggleBtn({ label, active, onClick }: {
+  label: string; active: boolean; onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        background: active ? '#2563eb' : '#334155',
+        color: active ? 'white' : '#94a3b8',
+        border: '1px solid',
+        borderColor: active ? '#2563eb' : '#475569',
+        borderRadius: 6,
+        padding: '4px 10px',
+        fontSize: 12,
+        cursor: 'pointer',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
 export function TopBar({
   scale, setScale,
   siteW, siteH, setSiteW, setSiteH,
   onImageUpload, getEditor,
+  showGrid, setShowGrid,
+  showBackground, setShowBackground,
 }: TopBarProps) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -127,10 +157,17 @@ export function TopBar({
         <NumInput value={scale} onChange={setScale} width={68} step={0.01} min={0.001} />
       </div>
 
+      {/* View toggles */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Show:</span>
+        <ToggleBtn label="20′ Grid" active={showGrid} onClick={() => setShowGrid(!showGrid)} />
+        <ToggleBtn label="Background" active={showBackground} onClick={() => setShowBackground(!showBackground)} />
+      </div>
+
       <div style={{ flex: 1 }} />
 
       <span style={{ color: '#94a3b8', fontSize: 11, whiteSpace: 'nowrap' }}>
-        ← → rotate · Shift+← → fine · Esc = select · Ctrl+Z = undo
+        ← → rotate · Shift fine · Esc select · Ctrl+Z undo
       </span>
 
       <label style={{

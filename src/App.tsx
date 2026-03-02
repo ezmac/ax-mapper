@@ -1,8 +1,7 @@
-import { useRef, useEffect, useState } from 'react'
-import { Tldraw, iconTypes, createShapeId } from 'tldraw'
-import type { TLComponents, TLUiAssetUrlOverrides, Editor, TLShapeId } from 'tldraw'
+import { useRef, useState } from 'react'
+import { Tldraw, iconTypes } from 'tldraw'
+import type { TLComponents, TLUiAssetUrlOverrides, Editor } from 'tldraw'
 import { ConeShapeUtil } from './shapes/ConeShapeUtil'
-import { SiteMapShapeUtil } from './shapes/SiteMapShapeUtil'
 import { StandingConeTool } from './tools/StandingConeTool'
 import { PointerConeTool } from './tools/PointerConeTool'
 import { TimingStartTool } from './tools/TimingStartTool'
@@ -10,13 +9,17 @@ import { TimingEndTool } from './tools/TimingEndTool'
 import { GcpTool } from './tools/GcpTool'
 import { GateTool } from './tools/GateTool'
 import { SlalomTool } from './tools/SlalomTool'
-import { TimingGateTool } from './tools/TimingGateTool'
+import { TimingStartGateTool } from './tools/TimingStartGateTool'
+import { TimingEndGateTool } from './tools/TimingEndGateTool'
 import { PointerPairTool } from './tools/PointerPairTool'
 import { ConeToolbar } from './components/ConeToolbar'
+import { GridOverlay } from './components/GridOverlay'
+import { CanvasBackground } from './components/CanvasBackground'
 import { TopBar } from './components/TopBar'
+import { OverlaySettingsContext } from './context/overlaySettings'
 import 'tldraw/tldraw.css'
 
-const SHAPE_UTILS = [ConeShapeUtil, SiteMapShapeUtil]
+const SHAPE_UTILS = [ConeShapeUtil]
 
 const TOOLS = [
   StandingConeTool,
@@ -26,7 +29,8 @@ const TOOLS = [
   GcpTool,
   GateTool,
   SlalomTool,
-  TimingGateTool,
+  TimingStartGateTool,
+  TimingEndGateTool,
   PointerPairTool,
 ]
 
@@ -44,10 +48,20 @@ const LOCAL_ASSET_URLS: TLUiAssetUrlOverrides = {
   },
 }
 
+function CanvasOverlays() {
+  return (
+    <>
+      <ConeToolbar />
+      <GridOverlay />
+    </>
+  )
+}
+
 const COMPONENTS: TLComponents = {
   Toolbar: null,
   StylePanel: null,
-  InFrontOfTheCanvas: ConeToolbar,
+  Background: CanvasBackground,
+  InFrontOfTheCanvas: CanvasOverlays,
 }
 
 export default function App() {
@@ -55,65 +69,46 @@ export default function App() {
   const [imageUrl, setImageUrl] = useState<string | null>(null)
   const [siteW, setSiteW] = useState(DEFAULT_SITE_W)
   const [siteH, setSiteH] = useState(DEFAULT_SITE_H)
+  const [showGrid, setShowGrid] = useState(false)
+  const [showBackground, setShowBackground] = useState(true)
 
   const editorRef = useRef<Editor | null>(null)
-  const siteMapIdRef = useRef<TLShapeId | null>(null)
 
   function handleMount(editor: Editor) {
     editorRef.current = editor
-
-    const id = createShapeId()
-    siteMapIdRef.current = id
-    editor.createShape({
-      id,
-      type: 'sitemap' as any,
-      x: 0,
-      y: 0,
-      isLocked: true,
-      props: { w: DEFAULT_SITE_W, h: DEFAULT_SITE_H, dataUrl: '' },
-    })
-    editor.sendToBack([id])
-    editor.zoomToFit({ animation: { duration: 0 } })
+    editor.zoomToBounds(
+      { x: 0, y: 0, w: DEFAULT_SITE_W, h: DEFAULT_SITE_H },
+      { animation: { duration: 0 }, inset: 32 },
+    )
   }
 
-  // Sync site map shape whenever image URL or dimensions change
-  useEffect(() => {
-    const editor = editorRef.current
-    const id = siteMapIdRef.current
-    if (!editor || !id) return
-
-    editor.run(() => {
-      editor.updateShape({
-        id,
-        type: 'sitemap' as any,
-        props: { w: siteW, h: siteH, dataUrl: imageUrl ?? '' },
-      })
-    }, { ignoreShapeLock: true })
-
-    editor.sendToBack([id])
-  }, [imageUrl, siteW, siteH])
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh' }}>
-      <TopBar
-        scale={scale}
-        setScale={setScale}
-        siteW={siteW}
-        siteH={siteH}
-        setSiteW={setSiteW}
-        setSiteH={setSiteH}
-        onImageUpload={setImageUrl}
-        getEditor={() => editorRef.current}
-      />
-      <div style={{ flex: 1, position: 'relative' }}>
-        <Tldraw
-          shapeUtils={SHAPE_UTILS}
-          tools={TOOLS}
-          components={COMPONENTS}
-          assetUrls={LOCAL_ASSET_URLS}
-          onMount={handleMount}
+    <OverlaySettingsContext.Provider value={{ showGrid, imageUrl, siteW, siteH, showBackground }}>
+      <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh' }}>
+        <TopBar
+          scale={scale}
+          setScale={setScale}
+          siteW={siteW}
+          siteH={siteH}
+          setSiteW={setSiteW}
+          setSiteH={setSiteH}
+          onImageUpload={setImageUrl}
+          getEditor={() => editorRef.current}
+          showGrid={showGrid}
+          setShowGrid={setShowGrid}
+          showBackground={showBackground}
+          setShowBackground={setShowBackground}
         />
+        <div style={{ flex: 1, position: 'relative' }}>
+          <Tldraw
+            shapeUtils={SHAPE_UTILS}
+            tools={TOOLS}
+            components={COMPONENTS}
+            assetUrls={LOCAL_ASSET_URLS}
+            onMount={handleMount}
+          />
+        </div>
       </div>
-    </div>
+    </OverlaySettingsContext.Provider>
   )
 }

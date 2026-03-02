@@ -180,9 +180,14 @@ export function ConeToolbar() {
           onClick={() => activate('gate')}
         />
         <ToolBtn
-          icon={<MiniPair left="timing_start" right="timing_end" />}
-          label="Tmg Gate" active={activeTool === 'timing-gate'}
-          onClick={() => activate('timing-gate')}
+          icon={<MiniPair left="timing_start" right="timing_start" />}
+          label="Start Gate" active={activeTool === 'timing-start-gate'}
+          onClick={() => activate('timing-start-gate')}
+        />
+        <ToolBtn
+          icon={<MiniPair left="timing_end" right="timing_end" />}
+          label="End Gate" active={activeTool === 'timing-end-gate'}
+          onClick={() => activate('timing-end-gate')}
         />
         <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 2px 2px' }}>
           Ptr Pair
