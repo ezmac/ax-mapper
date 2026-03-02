@@ -16,6 +16,8 @@ interface TopBarProps {
   setShowGrid: (v: boolean) => void
   showBackground: boolean
   setShowBackground: (v: boolean) => void
+  onMeasureScale: () => void
+  isMeasuring: boolean
 }
 
 const inputStyle: React.CSSProperties = {
@@ -79,6 +81,7 @@ export function TopBar({
   onImageUpload, getEditor,
   showGrid, setShowGrid,
   showBackground, setShowBackground,
+  onMeasureScale, isMeasuring,
 }: TopBarProps) {
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
@@ -156,6 +159,25 @@ export function TopBar({
         <span style={{ color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>m/unit:</span>
         <NumInput value={scale} onChange={setScale} width={68} step={0.01} min={0.001} />
       </div>
+
+      {/* Measure scale */}
+      <button
+        onClick={onMeasureScale}
+        style={{
+          background: isMeasuring ? '#d97706' : '#334155',
+          color: isMeasuring ? 'white' : '#cbd5e1',
+          border: '1px solid',
+          borderColor: isMeasuring ? '#d97706' : '#475569',
+          borderRadius: 6,
+          padding: '4px 10px',
+          fontSize: 12,
+          cursor: 'pointer',
+          fontWeight: 600,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        📏 Measure Scale
+      </button>
 
       {/* View toggles */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

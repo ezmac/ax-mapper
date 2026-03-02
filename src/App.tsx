@@ -16,6 +16,7 @@ import { ConeToolbar } from './components/ConeToolbar'
 import { GridOverlay } from './components/GridOverlay'
 import { CanvasBackground } from './components/CanvasBackground'
 import { TopBar } from './components/TopBar'
+import { MeasureOverlay } from './components/MeasureOverlay'
 import { OverlaySettingsContext } from './context/overlaySettings'
 import 'tldraw/tldraw.css'
 
@@ -71,6 +72,7 @@ export default function App() {
   const [siteH, setSiteH] = useState(DEFAULT_SITE_H)
   const [showGrid, setShowGrid] = useState(false)
   const [showBackground, setShowBackground] = useState(true)
+  const [measuring, setMeasuring] = useState(false)
 
   const editorRef = useRef<Editor | null>(null)
 
@@ -82,8 +84,16 @@ export default function App() {
     )
   }
 
+  function handleMeasureScale(newScale: number) {
+    // siteW/siteH are in feet; canvas units = siteW * 0.3048 / scale
+    // After remeasure, canvas dims stay the same, so new feet = canvas * newScale / 0.3048
+    setSiteW(Math.round(siteW * newScale / scale))
+    setSiteH(Math.round(siteH * newScale / scale))
+    setScale(newScale)
+  }
+
   return (
-    <OverlaySettingsContext.Provider value={{ showGrid, imageUrl, siteW, siteH, showBackground }}>
+    <OverlaySettingsContext.Provider value={{ showGrid, imageUrl, siteW, siteH, scale, showBackground }}>
       <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh' }}>
         <TopBar
           scale={scale}
@@ -98,6 +108,8 @@ export default function App() {
           setShowGrid={setShowGrid}
           showBackground={showBackground}
           setShowBackground={setShowBackground}
+          onMeasureScale={() => setMeasuring(true)}
+          isMeasuring={measuring}
         />
         <div style={{ flex: 1, position: 'relative' }}>
           <Tldraw
@@ -106,6 +118,12 @@ export default function App() {
             components={COMPONENTS}
             assetUrls={LOCAL_ASSET_URLS}
             onMount={handleMount}
+          />
+          <MeasureOverlay
+            active={measuring}
+            getEditor={() => editorRef.current}
+            onScale={handleMeasureScale}
+            onClose={() => setMeasuring(false)}
           />
         </div>
       </div>
