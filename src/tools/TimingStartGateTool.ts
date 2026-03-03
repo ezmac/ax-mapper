@@ -1,8 +1,10 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
 import { coneSettings } from '../settings'
 
 export class TimingStartGateTool extends BaseConeStampTool {
-  static override id = 'timing-start-gate'
+  readonly id = 'timing-start-gate'
+  constructor(api: CanvasAPI) { super(api) }
   protected override widthStep() { return coneSettings.size }
   protected layout() {
     return [

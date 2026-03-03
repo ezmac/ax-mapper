@@ -1,13 +1,6 @@
-import {
-  StateNode,
-  createShapeId,
-} from 'tldraw'
-import type {
-  TLPointerEventInfo,
-  TLKeyboardEventInfo,
-  TLShapeId,
-} from 'tldraw'
-import type { ConeType } from '../types/cone'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
+import type { ConeType } from '../canvas/ConeData'
+import type { ConeData } from '../canvas/ConeData'
 import { coneSettings } from '../settings'
 
 const STEP_NORMAL = Math.PI / 12   // 15° per arrow press
@@ -15,64 +8,44 @@ const STEP_FINE   = Math.PI / 180  // 1° with Shift held
 
 export interface LayoutEntry {
   coneType: ConeType
-  ox: number         // offset from stamp origin (page units)
+  ox: number          // offset from stamp origin (canvas units)
   oy: number
-  rotOffset?: number // extra rotation added to ghostRotation for this shape
+  rotOffset?: number  // extra rotation added to ghostRotation for this shape
 }
 
-export interface GhostEntry {
-  id: TLShapeId
-  rotOffset: number
+function rotate(x: number, y: number, rad: number): [number, number] {
+  const cos = Math.cos(rad)
+  const sin = Math.sin(rad)
+  return [x * cos - y * sin, x * sin + y * cos]
 }
 
-export abstract class BaseConeStampTool extends StateNode {
-  static override isLockable = false
-  static override useCoalescedEvents = false
+export class BaseConeStampTool {
+  readonly id: string = ''
 
-  protected ghostIds: GhostEntry[] = []
   protected ghostRotation = 0
-
-  /**
-   * Half-width of gate-like tools. Persists between activations so the user's
-   * last-set width is remembered. Gate tools reference this in layout().
-   */
   protected gateHalf = 20
 
-  protected abstract layout(): LayoutEntry[]
+  private currentGhosts: Omit<ConeData, 'id' | 'isGhost'>[] = []
 
-  /**
-   * Return a non-zero step to enable ↑/↓ width adjustment for gate-like tools.
-   * 0 (default) means ↑/↓ does nothing.
-   */
+  protected api: CanvasAPI
+
+  constructor(api: CanvasAPI) {
+    this.api = api
+  }
+
+  protected layout(): LayoutEntry[] {
+    throw new Error('layout() must be implemented by subclass')
+  }
+
   protected widthStep(): number { return 0 }
 
   private get sz() { return coneSettings.size }
 
-  /** Width and height for a given cone type. Pointer is wider than tall. */
   private dims(coneType: ConeType): { w: number; h: number } {
     const s = this.sz
     return coneType === 'pointer'
       ? { w: Math.round(s * 1.6), h: s }
       : { w: s, h: s }
-  }
-
-  private makeShapePartial(
-    id: TLShapeId,
-    entry: LayoutEntry,
-    x: number,
-    y: number,
-    isGhost: boolean
-  ) {
-    const { w, h } = this.dims(entry.coneType)
-    const rotation = this.ghostRotation + (entry.rotOffset ?? 0)
-    return {
-      id,
-      type: 'cone',
-      x,
-      y,
-      rotation,
-      props: { coneType: entry.coneType, isGhost, w, h },
-    } as any
   }
 
   private shapePos(
@@ -86,16 +59,14 @@ export abstract class BaseConeStampTool extends StateNode {
     const cos = Math.cos(totalRot)
     const sin = Math.sin(totalRot)
 
-    // tldraw applies transform: translate(x,y) then rotate(θ) around that origin.
-    // So a local point (ax, ay) lands at page (cos*ax - sin*ay + x, sin*ax + cos*ay + y).
-    // To pin the anchor to (cursorX + orbX, cursorY + orbY):
-    //   x = cursorX + orbX - (cos*ax - sin*ay)
-    //   y = cursorY + orbY - (sin*ax + cos*ay)
+    // Pin the centre of the shape's bounding box to (cursorX + orbX, cursorY + orbY).
+    // Shape origin x,y is the top-left corner; rotation is around that origin.
+    //   cx_in_local = w/2, cy_in_local = h/2
+    //   page centre = (cos·cx - sin·cy + x, sin·cx + cos·cy + y)
+    //   → x = cursorX + orbX - (cos·ax - sin·ay)
 
     const ax = w / 2
     const ay = h / 2
-
-    // Orbital offset rotated by ghostRotation (not totalRot).
     const [orbX, orbY] = rotate(ox, oy, this.ghostRotation)
 
     return {
@@ -104,125 +75,70 @@ export abstract class BaseConeStampTool extends StateNode {
     }
   }
 
-  private createGhostsAt(pageX: number, pageY: number) {
-    this.deleteGhosts()
-    for (const entry of this.layout()) {
-      const id = createShapeId()
+  private computeGhosts(pageX: number, pageY: number): Omit<ConeData, 'id' | 'isGhost'>[] {
+    return this.layout().map(entry => {
       const rotOffset = entry.rotOffset ?? 0
       const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy, entry.coneType, rotOffset)
-      this.editor.createShape(
-        this.makeShapePartial(id, entry, pos.x, pos.y, true)
-      )
-      this.ghostIds.push({ id, rotOffset })
-    }
-  }
-
-  private createGhosts() {
-    const { x, y } = this.editor.inputs.getCurrentPagePoint()
-    this.createGhostsAt(x, y)
-  }
-
-  // Protected so gate-like subclasses can call it after adjusting gateHalf.
-  protected updateGhosts(pageX: number, pageY: number) {
-    const layout = this.layout()
-
-    // If the count changed (e.g. pointer-pair count switched while tool was active),
-    // recreate all ghosts rather than updating mismatched entries.
-    if (layout.length !== this.ghostIds.length) {
-      this.createGhostsAt(pageX, pageY)
-      return
-    }
-
-    for (let i = 0; i < this.ghostIds.length; i++) {
-      const ghost = this.ghostIds[i]
-      const entry = layout[i]
-      // Use entry.ox/oy from the CURRENT layout() so dynamic layouts update correctly.
-      const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy, entry.coneType, ghost.rotOffset)
       const { w, h } = this.dims(entry.coneType)
-      this.editor.updateShape({
-        id: ghost.id,
-        type: 'cone' as any,
+      return {
+        coneType: entry.coneType,
         x: pos.x,
         y: pos.y,
-        rotation: this.ghostRotation + ghost.rotOffset,
-        props: { w, h },
-      })
-    }
-  }
-
-  private deleteGhosts() {
-    for (const { id } of this.ghostIds) {
-      this.editor.deleteShape(id)
-    }
-    this.ghostIds = []
-  }
-
-  override onEnter() {
-    this.ghostRotation = 0
-    this.editor.setCursor({ type: 'cross', rotation: 0 })
-    this.createGhosts()
-  }
-
-  override onExit() {
-    this.deleteGhosts()
-  }
-
-  override onPointerMove(_info: TLPointerEventInfo) {
-    const { x, y } = this.editor.inputs.getCurrentPagePoint()
-    this.updateGhosts(x, y)
-  }
-
-  override onKeyDown(info: TLKeyboardEventInfo) {
-    const { x, y } = this.editor.inputs.getCurrentPagePoint()
-
-    if (info.key === 'ArrowLeft' || info.key === 'ArrowRight') {
-      const step = info.shiftKey ? STEP_FINE : STEP_NORMAL
-      this.ghostRotation += info.key === 'ArrowRight' ? step : -step
-      this.updateGhosts(x, y)
-      return
-    }
-
-    if (info.key === 'ArrowUp' || info.key === 'ArrowDown') {
-      const ws = this.widthStep()
-      if (ws === 0) return
-      const step = info.shiftKey ? Math.max(1, Math.round(ws / 4)) : ws
-      this.gateHalf += info.key === 'ArrowUp' ? step : -step
-      this.gateHalf = Math.max(this.gateHalf, Math.ceil(this.sz / 2))
-      this.updateGhosts(x, y)
-    }
-  }
-
-  override onPointerDown(info: TLPointerEventInfo) {
-    if (info.target !== 'canvas' && info.target !== 'shape') return
-
-    // Read the ghost shapes' actual stored positions so placed cones are
-    // byte-for-byte identical to the preview rather than recomputed.
-    const snapshots = this.ghostIds.map(({ id }) => this.editor.getShape(id))
-
-    this.editor.markHistoryStoppingPoint('cone-stamp')
-    this.editor.run(() => {
-      for (const ghost of snapshots) {
-        if (!ghost) continue
-        const g = ghost as any
-        this.editor.createShape({
-          id: createShapeId(),
-          type: 'cone',
-          x: g.x,
-          y: g.y,
-          rotation: g.rotation ?? 0,
-          props: { ...g.props, isGhost: false },
-        } as any)
+        rotation: this.ghostRotation + rotOffset,
+        w,
+        h,
       }
     })
   }
 
-  override onCancel() {
-    this.editor.setCurrentTool('select')
+  private refresh(pageX: number, pageY: number): void {
+    this.currentGhosts = this.computeGhosts(pageX, pageY)
+    this.api.setGhosts(this.currentGhosts)
   }
-}
 
-function rotate(x: number, y: number, rad: number): [number, number] {
-  const cos = Math.cos(rad)
-  const sin = Math.sin(rad)
-  return [x * cos - y * sin, x * sin + y * cos]
+  onEnter(): void {
+    this.ghostRotation = 0
+    const { x, y } = this.api.getPointerPagePoint()
+    this.refresh(x, y)
+  }
+
+  onExit(): void {
+    this.api.clearGhosts()
+    this.currentGhosts = []
+  }
+
+  onPointerMove(): void {
+    const { x, y } = this.api.getPointerPagePoint()
+    this.refresh(x, y)
+  }
+
+  onKeyDown(e: KeyboardEvent): void {
+    const { x, y } = this.api.getPointerPagePoint()
+
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      const step = e.shiftKey ? STEP_FINE : STEP_NORMAL
+      this.ghostRotation += e.key === 'ArrowRight' ? step : -step
+      this.refresh(x, y)
+      return
+    }
+
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      const ws = this.widthStep()
+      if (ws === 0) return
+      const step = e.shiftKey ? Math.max(1, Math.round(ws / 4)) : ws
+      this.gateHalf += e.key === 'ArrowUp' ? step : -step
+      this.gateHalf = Math.max(this.gateHalf, Math.ceil(this.sz / 2))
+      this.refresh(x, y)
+    }
+  }
+
+  onPointerDown(): void {
+    const ghosts = this.currentGhosts
+    if (ghosts.length === 0) return
+    this.api.run(() => {
+      for (const ghost of ghosts) {
+        this.api.createCone(ghost)
+      }
+    })
+  }
 }

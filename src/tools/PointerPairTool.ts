@@ -1,12 +1,15 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
 import type { LayoutEntry } from './BaseConeStampTool'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
 import { coneSettings } from '../settings'
 
 // The pointer is placed to the right of the standing cone.
 // rotOffset π flips each pointer so its tip points LEFT — toward the standing cone.
 export class PointerPairTool extends BaseConeStampTool {
-  static override id = 'pointer-pair'
+  readonly id = 'pointer-pair'
   static pointerCount = 1
+
+  constructor(api: CanvasAPI) { super(api) }
 
   protected layout(): LayoutEntry[] {
     const s = coneSettings.size

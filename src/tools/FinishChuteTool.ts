@@ -1,10 +1,13 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
 import { coneSettings } from '../settings'
 
 const N_GATES = 10
 
 export class FinishChuteTool extends BaseConeStampTool {
-  static override id = 'finish-chute'
+  readonly id = 'finish-chute'
+
+  constructor(api: CanvasAPI) { super(api) }
 
   protected override widthStep() { return coneSettings.size }
 

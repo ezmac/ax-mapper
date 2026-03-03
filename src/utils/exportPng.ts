@@ -1,11 +1,9 @@
-import { Box } from 'tldraw'
-import type { Editor } from 'tldraw'
-import type { ConeShape } from '../types/cone'
+import type Konva from 'konva'
 
 const PIXEL_RATIO = 3
 
 export async function exportPng(
-  editor: Editor,
+  stage: Konva.Stage,
   imageUrl: string | null,
   siteW: number,  // feet
   siteH: number,  // feet
@@ -16,6 +14,7 @@ export async function exportPng(
   const pxW = Math.round(canvasW * PIXEL_RATIO)
   const pxH = Math.round(canvasH * PIXEL_RATIO)
 
+  // Use an offscreen canvas to composite background + cones
   const canvas = document.createElement('canvas')
   canvas.width = pxW
   canvas.height = pxH
@@ -25,10 +24,7 @@ export async function exportPng(
   if (imageUrl) {
     await new Promise<void>((resolve, reject) => {
       const img = new Image()
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, pxW, pxH)
-        resolve()
-      }
+      img.onload = () => { ctx.drawImage(img, 0, 0, pxW, pxH); resolve() }
       img.onerror = reject
       img.src = imageUrl
     })
@@ -37,23 +33,47 @@ export async function exportPng(
     ctx.fillRect(0, 0, pxW, pxH)
   }
 
-  // Export cones and composite on top
-  const shapeIds = editor.getCurrentPageShapes()
-    .filter(s => !(s as ConeShape).props?.isGhost)
-    .map(s => s.id)
+  // Export cones from the Konva stage at 1:1 scale (no pan/zoom)
+  // We temporarily set the stage to identity transform over the canvas bounds,
+  // but the simplest approach: use stage.toDataURL with a clip to the site bounds.
+  // The ghost layer is the 3rd layer (index 2); hide it during export.
+  const layers = stage.getLayers()
+  const ghostLayer = layers[2]   // ghostLayer added third in KonvaCanvas
+  const savedVisible = ghostLayer?.visible() ?? true
+  ghostLayer?.visible(false)
 
-  if (shapeIds.length > 0) {
-    const { blob } = await editor.toImage(shapeIds, {
-      format: 'png',
-      bounds: new Box(0, 0, canvasW, canvasH),
-      padding: 0,
-      pixelRatio: PIXEL_RATIO,
-      background: false,
-    })
-    const bitmap = await createImageBitmap(blob)
-    ctx.drawImage(bitmap, 0, 0)
-    bitmap.close()
-  }
+  const savedPos = { x: stage.x(), y: stage.y() }
+  const savedScale = { x: stage.scaleX(), y: stage.scaleY() }
+
+  // Temporarily set stage to render the canvas bounds at PIXEL_RATIO
+  stage.position({ x: 0, y: 0 })
+  stage.scale({ x: PIXEL_RATIO, y: PIXEL_RATIO })
+  stage.width(pxW)
+  stage.height(pxH)
+
+  const dataUrl = stage.toDataURL({
+    pixelRatio: 1,    // we've already scaled manually
+    x: 0,
+    y: 0,
+    width: pxW,
+    height: pxH,
+  })
+
+  // Restore stage
+  stage.position(savedPos)
+  stage.scale(savedScale)
+  stage.width(stage.container().offsetWidth)
+  stage.height(stage.container().offsetHeight)
+  ghostLayer?.visible(savedVisible)
+  stage.batchDraw()
+
+  // Draw cones on top of background
+  await new Promise<void>((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => { ctx.drawImage(img, 0, 0); resolve() }
+    img.onerror = reject
+    img.src = dataUrl
+  })
 
   const finalBlob = await new Promise<Blob>((resolve, reject) =>
     canvas.toBlob(b => b ? resolve(b) : reject(new Error('toBlob failed')), 'image/png')

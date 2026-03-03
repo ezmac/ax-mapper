@@ -1,14 +1,17 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
 import { coneSettings } from '../settings'
 
 export const SLALOM_COUNT_DEFAULT = 3
 
 export class SlalomTool extends BaseConeStampTool {
-  static override id = 'slalom'
+  readonly id = 'slalom'
   static coneCount = SLALOM_COUNT_DEFAULT
 
   // gateHalf repurposed as cone-to-cone spacing along the slalom axis
   protected override gateHalf = 25
+
+  constructor(api: CanvasAPI) { super(api) }
 
   protected override widthStep() { return coneSettings.size }
 

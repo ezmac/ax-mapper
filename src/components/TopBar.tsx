@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import type { Editor } from 'tldraw'
+import type { CanvasAPI } from '../canvas/CanvasAPI'
+import type Konva from 'konva'
 import { exportJSON } from '../utils/exportJSON'
 import { importJSON } from '../utils/importJSON'
 import { exportPng } from '../utils/exportPng'
@@ -13,7 +14,8 @@ interface TopBarProps {
   setSiteW: (w: number) => void
   setSiteH: (h: number) => void
   onImageUpload: (dataUrl: string) => void
-  getEditor: () => Editor | null
+  getCanvasAPI: () => CanvasAPI | null
+  getStage: () => Konva.Stage | null
   showGrid: boolean
   setShowGrid: (v: boolean) => void
   showBackground: boolean
@@ -81,13 +83,14 @@ function ToggleBtn({ label, active, onClick }: {
 export function TopBar({
   scale, setScale,
   siteW, siteH, setSiteW, setSiteH,
-  onImageUpload, getEditor,
+  onImageUpload, getCanvasAPI, getStage,
   showGrid, setShowGrid,
   showBackground, setShowBackground,
   onMeasureScale, isMeasuring,
   imageUrl,
 }: TopBarProps) {
   const [exportingPng, setExportingPng] = useState(false)
+
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -102,11 +105,11 @@ export function TopBar({
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const editor = getEditor()
-      if (!editor) return
+      const canvasAPI = getCanvasAPI()
+      if (!canvasAPI) return
       try {
         const data = JSON.parse(ev.target?.result as string)
-        importJSON(editor, data, coneSettings.size)
+        importJSON(canvasAPI, data, coneSettings.size)
       } catch (err) {
         alert(`Import failed: ${(err as Error).message}`)
       }
@@ -116,11 +119,11 @@ export function TopBar({
   }
 
   async function handleExportPng() {
-    const editor = getEditor()
-    if (!editor || exportingPng) return
+    const stage = getStage()
+    if (!stage || exportingPng) return
     setExportingPng(true)
     try {
-      await exportPng(editor, imageUrl, siteW, siteH, scale)
+      await exportPng(stage, imageUrl, siteW, siteH, scale)
     } catch (err) {
       alert(`PNG export failed: ${(err as Error).message}`)
     } finally {
@@ -129,9 +132,9 @@ export function TopBar({
   }
 
   function handleDownload() {
-    const editor = getEditor()
-    if (!editor) return
-    const data = exportJSON(editor, scale)
+    const canvasAPI = getCanvasAPI()
+    if (!canvasAPI) return
+    const data = exportJSON(canvasAPI.getCones(), scale)
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -205,7 +208,6 @@ export function TopBar({
       </div>
 
       <div style={{ flex: 1 }} />
-
 
       <label style={{
         background: '#334155', color: '#cbd5e1',

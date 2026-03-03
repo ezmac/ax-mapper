@@ -1,19 +1,37 @@
 import { useState } from 'react'
-import { useEditor } from 'tldraw'
+import type { ToolManager } from '../canvas/ToolManager'
 import { SlalomTool } from '../tools/SlalomTool'
 import { PointerPairTool } from '../tools/PointerPairTool'
 import { coneSettings } from '../settings'
-import { renderCone } from '../shapes/ConeShapeUtil'
-import type { ConeShape } from '../types/cone'
 
 // ─── mini SVG icon helpers ────────────────────────────────────────────────────
 
-type ConeT = ConeShape['props']['coneType']
+type ConeT = 'standing' | 'pointer' | 'timing_start' | 'timing_end' | 'gcp'
+
+const C_ORANGE  = '#FF8C00'
+const C_MAGENTA = '#FF00FF'
+const C_GREEN   = '#22c55e'
+const C_RED     = '#ef4444'
+const C_BLUE    = '#3b82f6'
+
+function renderMiniCone(type: ConeT, w: number, h: number) {
+  const r = Math.min(w, h) * 0.12
+  switch (type) {
+    case 'standing':   return <rect x={0} y={0} width={w} height={h} rx={r} fill={C_ORANGE} />
+    case 'timing_start': return <rect x={0} y={0} width={w} height={h} rx={r} fill={C_GREEN} />
+    case 'timing_end': return <rect x={0} y={0} width={w} height={h} rx={r} fill={C_RED} />
+    case 'pointer':    return <polygon points={`${w},${h/2} 0,0 0,${h}`} fill={C_MAGENTA} />
+    case 'gcp': {
+      const cx = w/2, cy = h/2, rad = Math.min(w,h)/2*0.92
+      return <><circle cx={cx} cy={cy} r={rad} fill={C_BLUE} /><circle cx={cx} cy={cy} r={rad*0.3} fill="white" /></>
+    }
+  }
+}
 
 function MiniCone({ type, size = 14 }: { type: ConeT; size?: number }) {
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      {renderCone(type, size, size)}
+      {renderMiniCone(type, size, size)}
     </svg>
   )
 }
@@ -23,31 +41,26 @@ function MiniPair({ left, right, size = 12 }: { left: ConeT; right: ConeT; size?
   const total = size * 2 + gap
   return (
     <svg width={total} height={size} viewBox={`0 0 ${total} ${size}`}>
-      {renderCone(left, size, size)}
-      <g transform={`translate(${size + gap}, 0)`}>
-        {renderCone(right, size, size)}
-      </g>
+      {renderMiniCone(left, size, size)}
+      <g transform={`translate(${size + gap}, 0)`}>{renderMiniCone(right, size, size)}</g>
     </svg>
   )
 }
 
-/** Standing cone + one pointer (tip pointing left) as a compact icon. */
 function MiniPointerPair({ size = 10 }: { size?: number }) {
   const pw = Math.round(size * 1.5)
   const gap = 2
   const total = size + gap + pw
   return (
     <svg width={total} height={size} viewBox={`0 0 ${total} ${size}`}>
-      {renderCone('standing', size, size)}
-      {/* flip horizontally so tip faces the standing cone */}
+      {renderMiniCone('standing', size, size)}
       <g transform={`translate(${size + gap + pw}, 0) scale(-1, 1)`}>
-        {renderCone('pointer', pw, size)}
+        {renderMiniCone('pointer', pw, size)}
       </g>
     </svg>
   )
 }
 
-/** Vertical column of N cones for the slalom icon (capped at 5 for display). */
 function MiniSlalom({ n = 4, size = 5 }: { n?: number; size?: number }) {
   const display = Math.min(n, 5)
   const gap = 2
@@ -56,14 +69,13 @@ function MiniSlalom({ n = 4, size = 5 }: { n?: number; size?: number }) {
     <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`}>
       {Array.from({ length: display }, (_, i) => (
         <g key={i} transform={`translate(0, ${i * (size + gap)})`}>
-          {renderCone('standing', size, size)}
+          {renderMiniCone('standing', size, size)}
         </g>
       ))}
     </svg>
   )
 }
 
-/** Two parallel columns of cones for the finish chute icon. */
 function MiniChute({ rows = 4, size = 5 }: { rows?: number; size?: number }) {
   const gap = 5
   const rowSpacing = size + 2
@@ -73,10 +85,8 @@ function MiniChute({ rows = 4, size = 5 }: { rows?: number; size?: number }) {
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
       {Array.from({ length: rows }, (_, i) => (
         <g key={i} transform={`translate(0, ${i * rowSpacing})`}>
-          {renderCone('standing', size, size)}
-          <g transform={`translate(${size + gap}, 0)`}>
-            {renderCone('standing', size, size)}
-          </g>
+          {renderMiniCone('standing', size, size)}
+          <g transform={`translate(${size + gap}, 0)`}>{renderMiniCone('standing', size, size)}</g>
         </g>
       ))}
     </svg>
@@ -122,7 +132,6 @@ function ToolBtn({
   )
 }
 
-/** Compact -/+ count input that fits inside the 72px sidebar. */
 function CountInput({ value, min = 1, max = 12, onChange }: {
   value: number; min?: number; max?: number; onChange: (n: number) => void
 }) {
@@ -159,57 +168,51 @@ function CountInput({ value, min = 1, max = 12, onChange }: {
 
 // ─── main component ───────────────────────────────────────────────────────────
 
-export function ConeToolbar() {
-  const editor = useEditor()
-  const [activeTool, setActiveTool] = useState('select')
+interface Props {
+  toolManager: ToolManager | null
+}
+
+export function ConeToolbar({ toolManager }: Props) {
+  const [activeTool, setActiveTool] = useState<string | null>(null)
   const [slalomCount, setSlalomCount] = useState(SlalomTool.coneCount)
   const [ptrCount, setPtrCount] = useState(PointerPairTool.pointerCount)
   const [coneSize, setConeSize] = useState(coneSettings.size)
 
-  function focusCanvas() {
-    editor.getContainer().focus()
-  }
-
-  function activate(toolId: string) {
-    editor.setCurrentTool(toolId)
+  function activate(toolId: string | null) {
+    toolManager?.setTool(toolId)
     setActiveTool(toolId)
-    focusCanvas()
   }
 
   function activatePtrPair(n: number) {
     PointerPairTool.pointerCount = n
     setPtrCount(n)
-    editor.setCurrentTool('pointer-pair')
-    setActiveTool('pointer-pair')
-    focusCanvas()
+    activate('pointer-pair')
   }
 
   function activateSlalom(n: number) {
     SlalomTool.coneCount = n
     setSlalomCount(n)
-    editor.setCurrentTool('slalom')
-    setActiveTool('slalom')
-    focusCanvas()
+    activate('slalom')
   }
 
   function handlePtrCount(n: number) {
     PointerPairTool.pointerCount = n
     setPtrCount(n)
-    if (activeTool === 'pointer-pair') editor.setCurrentTool('pointer-pair')
-    focusCanvas()
+    if (activeTool === 'pointer-pair') activate('pointer-pair')
   }
 
   function handleSlalomCount(n: number) {
     SlalomTool.coneCount = n
     setSlalomCount(n)
-    if (activeTool === 'slalom') editor.setCurrentTool('slalom')
-    focusCanvas()
+    if (activeTool === 'slalom') activate('slalom')
   }
 
   function handleSizeChange(val: number) {
     coneSettings.size = val
     setConeSize(val)
   }
+
+  const at = activeTool
 
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
@@ -227,32 +230,32 @@ export function ConeToolbar() {
 
         <ToolBtn
           icon={<span style={{ fontSize: 14 }}>↖</span>}
-          label="Select" active={activeTool === 'select'}
-          onClick={() => activate('select')}
+          label="Select" active={at === null}
+          onClick={() => activate(null)}
         />
         <ToolBtn
           icon={<MiniCone type="standing" />}
-          label="Standing" active={activeTool === 'standing-cone'}
+          label="Standing" active={at === 'standing-cone'}
           onClick={() => activate('standing-cone')}
         />
         <ToolBtn
           icon={<MiniCone type="pointer" />}
-          label="Pointer" active={activeTool === 'pointer-cone'}
+          label="Pointer" active={at === 'pointer-cone'}
           onClick={() => activate('pointer-cone')}
         />
         <ToolBtn
           icon={<MiniCone type="timing_start" />}
-          label="Tmg Start" active={activeTool === 'timing-start'}
+          label="Tmg Start" active={at === 'timing-start'}
           onClick={() => activate('timing-start')}
         />
         <ToolBtn
           icon={<MiniCone type="timing_end" />}
-          label="Tmg End" active={activeTool === 'timing-end'}
+          label="Tmg End" active={at === 'timing-end'}
           onClick={() => activate('timing-end')}
         />
         <ToolBtn
           icon={<MiniCone type="gcp" />}
-          label="GCP" active={activeTool === 'gcp'}
+          label="GCP" active={at === 'gcp'}
           onClick={() => activate('gcp')}
         />
 
@@ -260,29 +263,29 @@ export function ConeToolbar() {
 
         <ToolBtn
           icon={<MiniPair left="standing" right="standing" />}
-          label="Gate" active={activeTool === 'gate'}
+          label="Gate" active={at === 'gate'}
           onClick={() => activate('gate')}
         />
         <ToolBtn
           icon={<MiniPair left="timing_start" right="timing_start" />}
-          label="Start Gate" active={activeTool === 'timing-start-gate'}
+          label="Start Gate" active={at === 'timing-start-gate'}
           onClick={() => activate('timing-start-gate')}
         />
         <ToolBtn
           icon={<MiniPair left="timing_end" right="timing_end" />}
-          label="End Gate" active={activeTool === 'timing-end-gate'}
+          label="End Gate" active={at === 'timing-end-gate'}
           onClick={() => activate('timing-end-gate')}
         />
         <ToolBtn
           icon={<MiniChute />}
-          label="Fin Chute" active={activeTool === 'finish-chute'}
+          label="Fin Chute" active={at === 'finish-chute'}
           onClick={() => activate('finish-chute')}
         />
 
         <SectionLabel>Ptr Pair</SectionLabel>
         <ToolBtn
           icon={<MiniPointerPair />}
-          label="Ptr Pair" active={activeTool === 'pointer-pair'}
+          label="Ptr Pair" active={at === 'pointer-pair'}
           onClick={() => activatePtrPair(ptrCount)}
         />
         <CountInput value={ptrCount} min={1} max={6} onChange={handlePtrCount} />
@@ -290,7 +293,7 @@ export function ConeToolbar() {
         <SectionLabel>Slalom</SectionLabel>
         <ToolBtn
           icon={<MiniSlalom n={slalomCount} />}
-          label="Slalom" active={activeTool === 'slalom'}
+          label="Slalom" active={at === 'slalom'}
           onClick={() => activateSlalom(slalomCount)}
         />
         <CountInput value={slalomCount} min={2} max={12} onChange={handleSlalomCount} />

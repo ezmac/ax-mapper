@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
-import type { Editor } from 'tldraw'
+import type Konva from 'konva'
 
 type Phase = 'pick1' | 'pick2' | 'confirm'
 interface Pt { x: number; y: number }
 
 interface Props {
   active: boolean
-  getEditor: () => Editor | null
+  getStage: () => Konva.Stage | null
   onScale: (newScale: number) => void
   onClose: () => void
 }
 
-export function MeasureOverlay({ active, getEditor, onScale, onClose }: Props) {
+export function MeasureOverlay({ active, getStage, onScale, onClose }: Props) {
   const [phase, setPhase] = useState<Phase>('pick1')
   const [screenPt1, setScreenPt1] = useState<Pt | null>(null)
   const [screenPt2, setScreenPt2] = useState<Pt | null>(null)
@@ -37,14 +37,25 @@ export function MeasureOverlay({ active, getEditor, onScale, onClose }: Props) {
     return () => window.removeEventListener('keydown', handler)
   }, [active, onClose])
 
+  function screenToPage(clientX: number, clientY: number): Pt | null {
+    const stage = getStage()
+    if (!stage) return null
+    const rect = stage.container().getBoundingClientRect()
+    const scale = stage.scaleX()
+    const sp = stage.position()
+    return {
+      x: (clientX - rect.left - sp.x) / scale,
+      y: (clientY - rect.top  - sp.y) / scale,
+    }
+  }
+
   function handleClick(e: React.MouseEvent<HTMLDivElement>) {
     if (phase === 'confirm') return
-    const editor = getEditor()
-    if (!editor) return
 
     const rect = e.currentTarget.getBoundingClientRect()
     const overlayPt = { x: e.clientX - rect.left, y: e.clientY - rect.top }
-    const pagePt = editor.screenToPage({ x: e.clientX, y: e.clientY })
+    const pagePt = screenToPage(e.clientX, e.clientY)
+    if (!pagePt) return
 
     if (phase === 'pick1') {
       setScreenPt1(overlayPt)

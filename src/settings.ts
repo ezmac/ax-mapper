@@ -1,5 +1,5 @@
 /**
- * Mutable settings shared between React UI and tldraw StateNode tools.
+ * Mutable settings shared between React UI and stamp tools.
  * Tools read from this object when stamping new shapes.
  */
 export const coneSettings = {

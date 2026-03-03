@@ -1,26 +1,22 @@
-import { useEditor, useValue } from 'tldraw'
 import { useOverlaySettings } from '../context/overlaySettings'
 
 const GRID_FEET = 20
 
 export function GridOverlay() {
-  const { showGrid, scale } = useOverlaySettings()
-  const editor = useEditor()
-
-  // Reactively track camera so the grid updates on pan/zoom
-  const camera = useValue('camera', () => editor.getCamera(), [editor])
+  const { showGrid, scale, camera } = useOverlaySettings()
 
   if (!showGrid) return null
 
   const { x, y, z } = camera
+
   // Convert 20 feet → canvas units → screen pixels
   const gridUnits = GRID_FEET * 0.3048 / scale
   const gridPx = gridUnits * z
 
-  // Page-to-screen: screenX = (pageX + x) * z
-  // Phase: (x * z) mod gridPx gives where the page-origin grid line falls on screen
-  const ox = ((x * z % gridPx) + gridPx) % gridPx
-  const oy = ((y * z % gridPx) + gridPx) % gridPx
+  // Stage transform: screenX = pageX * z + x
+  // Phase: (x mod gridPx + gridPx) mod gridPx gives where the page-origin grid line falls
+  const ox = ((x % gridPx) + gridPx) % gridPx
+  const oy = ((y % gridPx) + gridPx) % gridPx
 
   return (
     <div
