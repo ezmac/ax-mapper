@@ -1,6 +1,8 @@
+import { useState } from 'react'
 import type { Editor } from 'tldraw'
 import { exportJSON } from '../utils/exportJSON'
 import { importJSON } from '../utils/importJSON'
+import { exportPng } from '../utils/exportPng'
 import { coneSettings } from '../settings'
 
 interface TopBarProps {
@@ -18,6 +20,7 @@ interface TopBarProps {
   setShowBackground: (v: boolean) => void
   onMeasureScale: () => void
   isMeasuring: boolean
+  imageUrl: string | null
 }
 
 const inputStyle: React.CSSProperties = {
@@ -82,7 +85,9 @@ export function TopBar({
   showGrid, setShowGrid,
   showBackground, setShowBackground,
   onMeasureScale, isMeasuring,
+  imageUrl,
 }: TopBarProps) {
+  const [exportingPng, setExportingPng] = useState(false)
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -108,6 +113,19 @@ export function TopBar({
     }
     reader.readAsText(file)
     e.target.value = ''
+  }
+
+  async function handleExportPng() {
+    const editor = getEditor()
+    if (!editor || exportingPng) return
+    setExportingPng(true)
+    try {
+      await exportPng(editor, imageUrl, siteW, siteH, scale)
+    } catch (err) {
+      alert(`PNG export failed: ${(err as Error).message}`)
+    } finally {
+      setExportingPng(false)
+    }
   }
 
   function handleDownload() {
@@ -201,6 +219,18 @@ export function TopBar({
         ⬆ Import JSON
         <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
       </label>
+
+      <button
+        onClick={handleExportPng}
+        disabled={exportingPng}
+        style={{
+          background: exportingPng ? '#374151' : '#0f766e', color: 'white', border: 'none',
+          borderRadius: 6, padding: '6px 14px', fontSize: 13,
+          cursor: exportingPng ? 'not-allowed' : 'pointer', fontWeight: 600, whiteSpace: 'nowrap',
+        }}
+      >
+        {exportingPng ? 'Exporting…' : '⬇ Export PNG'}
+      </button>
 
       <button
         onClick={handleDownload}

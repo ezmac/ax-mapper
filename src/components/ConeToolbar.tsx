@@ -10,7 +10,6 @@ import type { ConeShape } from '../types/cone'
 
 type ConeT = ConeShape['props']['coneType']
 
-/** Single cone rendered as a small SVG for toolbar buttons. */
 function MiniCone({ type, size = 14 }: { type: ConeT; size?: number }) {
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
@@ -19,7 +18,6 @@ function MiniCone({ type, size = 14 }: { type: ConeT; size?: number }) {
   )
 }
 
-/** Two cones side-by-side for compound tool icons. */
 function MiniPair({ left, right, size = 12 }: { left: ConeT; right: ConeT; size?: number }) {
   const gap = 2
   const total = size * 2 + gap
@@ -33,15 +31,52 @@ function MiniPair({ left, right, size = 12 }: { left: ConeT; right: ConeT; size?
   )
 }
 
-/** Row of N identical cones for the slalom icon. */
-function MiniSlalom({ n, size = 6 }: { n: number; size?: number }) {
+/** Standing cone + one pointer (tip pointing left) as a compact icon. */
+function MiniPointerPair({ size = 10 }: { size?: number }) {
+  const pw = Math.round(size * 1.5)
   const gap = 2
-  const total = n * size + (n - 1) * gap
+  const total = size + gap + pw
   return (
     <svg width={total} height={size} viewBox={`0 0 ${total} ${size}`}>
-      {Array.from({ length: n }, (_, i) => (
-        <g key={i} transform={`translate(${i * (size + gap)}, 0)`}>
+      {renderCone('standing', size, size)}
+      {/* flip horizontally so tip faces the standing cone */}
+      <g transform={`translate(${size + gap + pw}, 0) scale(-1, 1)`}>
+        {renderCone('pointer', pw, size)}
+      </g>
+    </svg>
+  )
+}
+
+/** Vertical column of N cones for the slalom icon (capped at 5 for display). */
+function MiniSlalom({ n = 4, size = 5 }: { n?: number; size?: number }) {
+  const display = Math.min(n, 5)
+  const gap = 2
+  const h = display * size + (display - 1) * gap
+  return (
+    <svg width={size} height={h} viewBox={`0 0 ${size} ${h}`}>
+      {Array.from({ length: display }, (_, i) => (
+        <g key={i} transform={`translate(0, ${i * (size + gap)})`}>
           {renderCone('standing', size, size)}
+        </g>
+      ))}
+    </svg>
+  )
+}
+
+/** Two parallel columns of cones for the finish chute icon. */
+function MiniChute({ rows = 4, size = 5 }: { rows?: number; size?: number }) {
+  const gap = 5
+  const rowSpacing = size + 2
+  const w = size * 2 + gap
+  const h = rows * rowSpacing - 2
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`}>
+      {Array.from({ length: rows }, (_, i) => (
+        <g key={i} transform={`translate(0, ${i * rowSpacing})`}>
+          {renderCone('standing', size, size)}
+          <g transform={`translate(${size + gap}, 0)`}>
+            {renderCone('standing', size, size)}
+          </g>
         </g>
       ))}
     </svg>
@@ -87,13 +122,48 @@ function ToolBtn({
   )
 }
 
+/** Compact -/+ count input that fits inside the 72px sidebar. */
+function CountInput({ value, min = 1, max = 12, onChange }: {
+  value: number; min?: number; max?: number; onChange: (n: number) => void
+}) {
+  const btnStyle: React.CSSProperties = {
+    width: 18, height: 18, border: '1px solid #d1d5db', borderRadius: 4,
+    background: '#f3f4f6', cursor: 'pointer', fontSize: 13, lineHeight: 1,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0, padding: 0, color: '#374151',
+  }
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, padding: '1px 2px' }}>
+      <button style={btnStyle} onClick={() => onChange(Math.max(min, value - 1))}>−</button>
+      <input
+        type="number"
+        value={value}
+        min={min}
+        max={max}
+        onChange={e => {
+          const v = parseInt(e.target.value)
+          if (!isNaN(v) && v >= min && v <= max) onChange(v)
+        }}
+        onFocus={e => e.target.select()}
+        style={{
+          width: 26, textAlign: 'center', fontSize: 11, fontWeight: 700,
+          border: '1px solid #d1d5db', borderRadius: 4, padding: '1px 0',
+          background: 'white', color: '#111827',
+          MozAppearance: 'textfield',
+        } as React.CSSProperties}
+      />
+      <button style={btnStyle} onClick={() => onChange(Math.min(max, value + 1))}>+</button>
+    </div>
+  )
+}
+
 // ─── main component ───────────────────────────────────────────────────────────
 
 export function ConeToolbar() {
   const editor = useEditor()
   const [activeTool, setActiveTool] = useState('select')
-  const [slalomCount, setSlalomCount] = useState(5)
-  const [ptrCount, setPtrCount] = useState(1)
+  const [slalomCount, setSlalomCount] = useState(SlalomTool.coneCount)
+  const [ptrCount, setPtrCount] = useState(PointerPairTool.pointerCount)
   const [coneSize, setConeSize] = useState(coneSettings.size)
 
   function focusCanvas() {
@@ -119,6 +189,20 @@ export function ConeToolbar() {
     setSlalomCount(n)
     editor.setCurrentTool('slalom')
     setActiveTool('slalom')
+    focusCanvas()
+  }
+
+  function handlePtrCount(n: number) {
+    PointerPairTool.pointerCount = n
+    setPtrCount(n)
+    if (activeTool === 'pointer-pair') editor.setCurrentTool('pointer-pair')
+    focusCanvas()
+  }
+
+  function handleSlalomCount(n: number) {
+    SlalomTool.coneCount = n
+    setSlalomCount(n)
+    if (activeTool === 'slalom') editor.setCurrentTool('slalom')
     focusCanvas()
   }
 
@@ -189,51 +273,27 @@ export function ConeToolbar() {
           label="End Gate" active={activeTool === 'timing-end-gate'}
           onClick={() => activate('timing-end-gate')}
         />
-        <div style={{ fontSize: 9, fontWeight: 700, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: '0.06em', padding: '4px 2px 2px' }}>
-          Ptr Pair
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 2 }}>
-          {[1, 2, 3, 4].map(n => (
-            <button
-              key={n}
-              onClick={() => activatePtrPair(n)}
-              title={`${n} pointer${n > 1 ? 's' : ''}`}
-              style={{
-                padding: '3px 0', border: 'none', borderRadius: 4,
-                background: activeTool === 'pointer-pair' && ptrCount === n ? '#dbeafe' : '#f3f4f6',
-                outline: activeTool === 'pointer-pair' && ptrCount === n ? '2px solid #2563eb' : '2px solid transparent',
-                cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                color: activeTool === 'pointer-pair' && ptrCount === n ? '#1d4ed8' : '#374151',
-              }}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
+        <ToolBtn
+          icon={<MiniChute />}
+          label="Fin Chute" active={activeTool === 'finish-chute'}
+          onClick={() => activate('finish-chute')}
+        />
+
+        <SectionLabel>Ptr Pair</SectionLabel>
+        <ToolBtn
+          icon={<MiniPointerPair />}
+          label="Ptr Pair" active={activeTool === 'pointer-pair'}
+          onClick={() => activatePtrPair(ptrCount)}
+        />
+        <CountInput value={ptrCount} min={1} max={6} onChange={handlePtrCount} />
 
         <SectionLabel>Slalom</SectionLabel>
-
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
-          {[3, 4, 5, 6, 7, 8].map(n => (
-            <button
-              key={n}
-              onClick={() => activateSlalom(n)}
-              title={`${n}-cone slalom`}
-              style={{
-                padding: '3px 0', border: 'none', borderRadius: 4,
-                background: activeTool === 'slalom' && slalomCount === n ? '#dbeafe' : '#f3f4f6',
-                outline: activeTool === 'slalom' && slalomCount === n ? '2px solid #2563eb' : '2px solid transparent',
-                cursor: 'pointer', fontSize: 11, fontWeight: 600,
-                color: activeTool === 'slalom' && slalomCount === n ? '#1d4ed8' : '#374151',
-              }}
-            >
-              {n}
-            </button>
-          ))}
-        </div>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '2px 0' }}>
-          <MiniSlalom n={Math.min(slalomCount, 5)} />
-        </div>
+        <ToolBtn
+          icon={<MiniSlalom n={slalomCount} />}
+          label="Slalom" active={activeTool === 'slalom'}
+          onClick={() => activateSlalom(slalomCount)}
+        />
+        <CountInput value={slalomCount} min={2} max={12} onChange={handleSlalomCount} />
 
         {/* ── cone size control ── */}
         <SectionLabel>Size</SectionLabel>

@@ -12,6 +12,7 @@ import { SlalomTool } from './tools/SlalomTool'
 import { TimingStartGateTool } from './tools/TimingStartGateTool'
 import { TimingEndGateTool } from './tools/TimingEndGateTool'
 import { PointerPairTool } from './tools/PointerPairTool'
+import { FinishChuteTool } from './tools/FinishChuteTool'
 import { ConeToolbar } from './components/ConeToolbar'
 import { GridOverlay } from './components/GridOverlay'
 import { CanvasBackground } from './components/CanvasBackground'
@@ -33,6 +34,7 @@ const TOOLS = [
   TimingStartGateTool,
   TimingEndGateTool,
   PointerPairTool,
+  FinishChuteTool,
 ]
 
 const DEFAULT_SCALE = 0.3048
@@ -110,6 +112,7 @@ export default function App() {
           setShowBackground={setShowBackground}
           onMeasureScale={() => setMeasuring(true)}
           isMeasuring={measuring}
+          imageUrl={imageUrl}
         />
         <div style={{ flex: 1, position: 'relative' }}>
           <Tldraw

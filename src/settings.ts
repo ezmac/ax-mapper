@@ -4,5 +4,5 @@
  */
 export const coneSettings = {
   /** Side length in canvas units for newly stamped cones. */
-  size: 16,
+  size: 3,
 }

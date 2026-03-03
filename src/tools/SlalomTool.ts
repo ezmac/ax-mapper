@@ -1,22 +1,25 @@
 import { BaseConeStampTool } from './BaseConeStampTool'
+import { coneSettings } from '../settings'
 
-// Slalom: N standing cones in a line, 25 units apart
-const SLALOM_SPACING = 25
-export const SLALOM_COUNT_DEFAULT = 5
+export const SLALOM_COUNT_DEFAULT = 3
 
 export class SlalomTool extends BaseConeStampTool {
   static override id = 'slalom'
-
-  // Configurable count – set by UI before switching to this tool
   static coneCount = SLALOM_COUNT_DEFAULT
+
+  // gateHalf repurposed as cone-to-cone spacing along the slalom axis
+  protected override gateHalf = 25
+
+  protected override widthStep() { return coneSettings.size }
 
   protected layout() {
     const n = SlalomTool.coneCount
-    const half = ((n - 1) * SLALOM_SPACING) / 2
+    const spacing = this.gateHalf
+    const half = ((n - 1) * spacing) / 2
     return Array.from({ length: n }, (_, i) => ({
       coneType: 'standing' as const,
       ox: 0,
-      oy: -half + i * SLALOM_SPACING,
+      oy: -half + i * spacing,
     }))
   }
 }
