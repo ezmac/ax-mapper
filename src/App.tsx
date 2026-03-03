@@ -42,13 +42,15 @@ const DEFAULT_SCALE = 0.3048
 const DEFAULT_SITE_W = 1000
 const DEFAULT_SITE_H = 600
 
+const base = import.meta.env.BASE_URL
+
 const LOCAL_ASSET_URLS: TLUiAssetUrlOverrides = {
   icons: Object.fromEntries(
-    iconTypes.map(name => [name, `/icons/0_merged.svg#${name}`])
+    iconTypes.map(name => [name, `${base}icons/0_merged.svg#${name}`])
   ),
   fonts: {
-    tldraw_mono: '/fonts/IBMPlexMono-Medium.woff2',
-    tldraw_sans: '/fonts/IBMPlexSans-Medium.woff2',
+    tldraw_mono: `${base}fonts/IBMPlexMono-Medium.woff2`,
+    tldraw_sans: `${base}fonts/IBMPlexSans-Medium.woff2`,
   },
 }
 
