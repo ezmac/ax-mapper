@@ -15,6 +15,7 @@ import { PointerPairTool } from './tools/PointerPairTool'
 import { FinishChuteTool } from './tools/FinishChuteTool'
 import { ConeToolbar } from './components/ConeToolbar'
 import { GridOverlay } from './components/GridOverlay'
+import { HelpOverlay } from './components/HelpOverlay'
 import { CanvasBackground } from './components/CanvasBackground'
 import { TopBar } from './components/TopBar'
 import { MeasureOverlay } from './components/MeasureOverlay'
@@ -56,6 +57,7 @@ function CanvasOverlays() {
     <>
       <ConeToolbar />
       <GridOverlay />
+      <HelpOverlay />
     </>
   )
 }

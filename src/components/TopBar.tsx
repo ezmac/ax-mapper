@@ -174,8 +174,8 @@ export function TopBar({
 
       {/* Coordinate scale */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>m/unit:</span>
-        <NumInput value={scale} onChange={setScale} width={68} step={0.01} min={0.001} />
+        <span style={{ color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap' }}>ft/unit:</span>
+        <NumInput value={scale / 0.3048} onChange={v => setScale(v * 0.3048)} width={68} step={0.1} min={0.01} />
       </div>
 
       {/* Measure scale */}
@@ -206,9 +206,6 @@ export function TopBar({
 
       <div style={{ flex: 1 }} />
 
-      <span style={{ color: '#94a3b8', fontSize: 11, whiteSpace: 'nowrap' }}>
-        ← → rotate · Shift fine · Esc select · Ctrl+Z undo
-      </span>
 
       <label style={{
         background: '#334155', color: '#cbd5e1',
