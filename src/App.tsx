@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useRef, useState, useEffect } from 'react'
 import { KonvaCanvas } from './canvas/KonvaCanvas'
 import type { KonvaCanvasHandle } from './canvas/KonvaCanvas'
 import { ConeToolbar } from './components/ConeToolbar'
@@ -26,6 +26,20 @@ export default function App() {
   const [canvasHandle, setCanvasHandle] = useState<KonvaCanvasHandle | null>(null)
   // also kept in a ref for imperative access (export/import callbacks)
   const handleRef = useRef<KonvaCanvasHandle | null>(null)
+
+  // When a new image is uploaded, snap siteH to match the image's natural
+  // aspect ratio (keeping siteW fixed).  Without this the image is stretched
+  // non-uniformly and X/Y have different real-world scales.
+  const siteWRef = useRef(siteW)
+  siteWRef.current = siteW
+  useEffect(() => {
+    if (!imageUrl) return
+    const img = new window.Image()
+    img.onload = () => {
+      setSiteH(Math.round(siteWRef.current * img.naturalHeight / img.naturalWidth))
+    }
+    img.src = imageUrl
+  }, [imageUrl])
 
   // Canvas dimensions in canvas-space units
   const canvasW = siteW * 0.3048 / scale

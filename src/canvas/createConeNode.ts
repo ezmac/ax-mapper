@@ -18,7 +18,7 @@ export function createConeNode(data: ConeData): Konva.Group {
     y,
     rotation: rotation * (180 / Math.PI), // Konva uses degrees
     opacity,
-    listening: false, // cones don't need pointer events
+    // listening defaults to true; KonvaCanvas sets it based on tool mode
   })
 
   const r = Math.min(w, h) * 0.12  // corner radius for square cones

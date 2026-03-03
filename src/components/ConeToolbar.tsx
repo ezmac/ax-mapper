@@ -300,23 +300,7 @@ export function ConeToolbar({ toolManager }: Props) {
 
         {/* ── cone size control ── */}
         <SectionLabel>Size</SectionLabel>
-        <div style={{ padding: '0 2px', display: 'flex', flexDirection: 'column', gap: 3 }}>
-          <input
-            type="range"
-            min={3} max={48} step={1}
-            value={coneSize}
-            onChange={e => handleSizeChange(Number(e.target.value))}
-            style={{ width: '100%', cursor: 'pointer' }}
-          />
-          <div style={{
-            display: 'flex', justifyContent: 'space-between',
-            alignItems: 'center', fontSize: 9, color: '#6b7280',
-          }}>
-            <span>3</span>
-            <span style={{ fontWeight: 700, color: '#374151', fontSize: 11 }}>{coneSize}</span>
-            <span>48</span>
-          </div>
-        </div>
+        <CountInput value={coneSize} min={1} max={8} onChange={handleSizeChange} />
       </div>
     </div>
   )
