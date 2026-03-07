@@ -1,0 +1,176 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ax-mapper-output",
+  "title": "AX Mapper Course Export",
+  "description": "Autocross course layout exported by ax-mapper. All positions are in Blender/world space: bx = east (metres), by = north (metres, +Y up, canvas Y flipped).",
+  "type": "object",
+  "required": [
+    "transform",
+    "pointer_source",
+    "n_standing", "n_pointer", "n_green", "n_red", "n_blue",
+    "bounds",
+    "standing", "pointers", "greens", "reds", "blues"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "transform": {
+      "description": "Coordinate transform applied to convert canvas units to world-space metres.",
+      "type": "object",
+      "required": ["type", "scale", "ox", "oy"],
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "description": "Transform kind — always 'scale' in current exports.",
+          "type": "string",
+          "const": "scale"
+        },
+        "scale": {
+          "description": "Metres per canvas unit (scaleMetresPerUnit). Multiply a canvas-unit distance by this to get metres.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ox": {
+          "description": "World-space X origin offset (metres). Always 0 in current exports.",
+          "type": "number"
+        },
+        "oy": {
+          "description": "World-space Y origin offset (metres). Always 0 in current exports.",
+          "type": "number"
+        }
+      }
+    },
+
+    "pointer_source": {
+      "description": "Colour used to render pointer cones in the source map image.",
+      "type": "string",
+      "enum": ["magenta", "orange"]
+    },
+
+    "n_standing": {
+      "description": "Count of standing (orange) cones.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "n_pointer": {
+      "description": "Count of pointer (directional) cones.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "n_green": {
+      "description": "Count of timing-start (green) cones.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "n_red": {
+      "description": "Count of timing-end (red) cones.",
+      "type": "integer",
+      "minimum": 0
+    },
+    "n_blue": {
+      "description": "Count of GCP (blue) cones.",
+      "type": "integer",
+      "minimum": 0
+    },
+
+    "bounds": {
+      "description": "Axis-aligned bounding box of all cone centres in world space (metres). All four values are 0 when no cones are placed.",
+      "type": "object",
+      "required": ["xmin", "xmax", "ymin", "ymax"],
+      "additionalProperties": false,
+      "properties": {
+        "xmin": { "type": "number" },
+        "xmax": { "type": "number" },
+        "ymin": { "type": "number" },
+        "ymax": { "type": "number" }
+      }
+    },
+
+    "standing": {
+      "description": "Standing (orange) cone entries.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/coneEntry" }
+    },
+    "pointers": {
+      "description": "Pointer (directional) cone entries. Each entry includes facing_deg.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/pointerEntry" }
+    },
+    "greens": {
+      "description": "Timing-start (green) cone entries.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/coneEntry" }
+    },
+    "reds": {
+      "description": "Timing-end (red) cone entries.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/coneEntry" }
+    },
+    "blues": {
+      "description": "GCP (blue) cone entries.",
+      "type": "array",
+      "items": { "$ref": "#/$defs/coneEntry" }
+    }
+  },
+
+  "$defs": {
+    "coneEntry": {
+      "description": "A single placed cone (non-directional types).",
+      "type": "object",
+      "required": ["bx", "by", "type", "size"],
+      "additionalProperties": false,
+      "properties": {
+        "bx": {
+          "description": "World-space east position of the cone centre (metres).",
+          "type": "number"
+        },
+        "by": {
+          "description": "World-space north position of the cone centre (metres, +Y up).",
+          "type": "number"
+        },
+        "type": {
+          "description": "Cone type.",
+          "type": "string",
+          "enum": ["standing", "timing_start", "timing_end", "gcp"]
+        },
+        "size": {
+          "description": "Height of the cone bounding box in canvas units (equals coneSettings.size for square cones).",
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+
+    "pointerEntry": {
+      "description": "A directional pointer cone.",
+      "type": "object",
+      "required": ["bx", "by", "type", "size", "facing_deg"],
+      "additionalProperties": false,
+      "properties": {
+        "bx": {
+          "description": "World-space east position of the cone centre (metres).",
+          "type": "number"
+        },
+        "by": {
+          "description": "World-space north position of the cone centre (metres, +Y up).",
+          "type": "number"
+        },
+        "type": {
+          "description": "Cone type — always 'pointer' in this array.",
+          "type": "string",
+          "const": "pointer"
+        },
+        "size": {
+          "description": "Height of the pointer bounding box in canvas units.",
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "facing_deg": {
+          "description": "Direction the pointer tip faces, in degrees CCW from east (+X), range [0, 360). Rounded to 2 decimal places.",
+          "type": "number",
+          "minimum": 0,
+          "exclusiveMaximum": 360
+        }
+      }
+    }
+  }
+}
