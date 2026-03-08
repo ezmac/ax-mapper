@@ -18,15 +18,15 @@ interface ExportData {
   pointer_source: 'magenta' | 'orange'
   n_standing: number
   n_pointer: number
-  n_green: number
-  n_red: number
-  n_blue: number
+  n_timing_start: number
+  n_timing_end: number
+  n_gcp: number
   bounds: { xmin: number; xmax: number; ymin: number; ymax: number }
   standing: ConeEntry[]
   pointers: ConeEntry[]
-  greens: ConeEntry[]
-  reds: ConeEntry[]
-  blues: ConeEntry[]
+  timing_start: ConeEntry[]
+  timing_end: ConeEntry[]
+  gcp: ConeEntry[]
 }
 
 export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): ExportData {
@@ -34,9 +34,9 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
 
   const standing: ConeEntry[] = []
   const pointers: ConeEntry[] = []
-  const greens: ConeEntry[] = []
-  const reds: ConeEntry[] = []
-  const blues: ConeEntry[] = []
+  const timing_start: ConeEntry[] = []
+  const timing_end: ConeEntry[] = []
+  const gcp: ConeEntry[] = []
 
   let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
 
@@ -67,11 +67,11 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
     } else if (cone.coneType === 'standing') {
       standing.push(entry)
     } else if (cone.coneType === 'timing_start') {
-      greens.push(entry)
+      timing_start.push(entry)
     } else if (cone.coneType === 'timing_end') {
-      reds.push(entry)
+      timing_end.push(entry)
     } else if (cone.coneType === 'gcp') {
-      blues.push(entry)
+      gcp.push(entry)
     }
   }
 
@@ -84,14 +84,14 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
     pointer_source: 'magenta',
     n_standing: standing.length,
     n_pointer: pointers.length,
-    n_green: greens.length,
-    n_red: reds.length,
-    n_blue: blues.length,
+    n_timing_start: timing_start.length,
+    n_timing_end: timing_end.length,
+    n_gcp: gcp.length,
     bounds: { xmin, xmax, ymin, ymax },
     standing,
     pointers,
-    greens,
-    reds,
-    blues,
+    timing_start,
+    timing_end,
+    gcp,
   }
 }
