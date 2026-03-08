@@ -2,75 +2,54 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "ax-mapper-output",
   "title": "AX Mapper Course Export",
-  "description": "Autocross course layout exported by ax-mapper. All positions are in Blender/world space: bx = east (metres), by = north (metres, +Y up, canvas Y flipped).",
+  "description": "Autocross course layout exported by ax-mapper. Structurally compatible with cone_data.schema.json. All positions are in Blender/world space: bx = east (metres), by = north (metres, +Y up).",
   "type": "object",
   "required": [
     "transform",
     "pointer_source",
-    "n_standing", "n_pointer", "n_green", "n_red", "n_blue",
+    "n_standing", "n_pointer", "n_timing_start", "n_timing_end", "n_gcp",
     "bounds",
-    "standing", "pointers", "greens", "reds", "blues"
+    "standing", "pointers", "timing_start", "timing_end", "gcp"
   ],
   "additionalProperties": false,
   "properties": {
     "transform": {
-      "description": "Coordinate transform applied to convert canvas units to world-space metres.",
+      "description": "Uniform-scale coordinate transform. bx = scale*cx + ox; by = -scale*cy + oy (canvas Y flipped to world +Y up).",
       "type": "object",
       "required": ["type", "scale", "ox", "oy"],
       "additionalProperties": false,
       "properties": {
         "type": {
-          "description": "Transform kind — always 'scale' in current exports.",
           "type": "string",
           "const": "scale"
         },
         "scale": {
-          "description": "Metres per canvas unit (scaleMetresPerUnit). Multiply a canvas-unit distance by this to get metres.",
+          "description": "Metres per canvas unit (scaleMetresPerUnit).",
           "type": "number",
           "exclusiveMinimum": 0
         },
         "ox": {
-          "description": "World-space X origin offset (metres). Always 0 in current exports.",
+          "description": "X origin offset (metres). Always 0 in current exports.",
           "type": "number"
         },
         "oy": {
-          "description": "World-space Y origin offset (metres). Always 0 in current exports.",
+          "description": "Y origin offset (metres). Always 0 in current exports.",
           "type": "number"
         }
       }
     },
 
     "pointer_source": {
-      "description": "Colour used to render pointer cones in the source map image.",
+      "description": "Colour used to render pointer cones.",
       "type": "string",
       "enum": ["magenta", "orange"]
     },
 
-    "n_standing": {
-      "description": "Count of standing (orange) cones.",
-      "type": "integer",
-      "minimum": 0
-    },
-    "n_pointer": {
-      "description": "Count of pointer (directional) cones.",
-      "type": "integer",
-      "minimum": 0
-    },
-    "n_green": {
-      "description": "Count of timing-start (green) cones.",
-      "type": "integer",
-      "minimum": 0
-    },
-    "n_red": {
-      "description": "Count of timing-end (red) cones.",
-      "type": "integer",
-      "minimum": 0
-    },
-    "n_blue": {
-      "description": "Count of GCP (blue) cones.",
-      "type": "integer",
-      "minimum": 0
-    },
+    "n_standing":     { "type": "integer", "minimum": 0, "description": "Count of standing (orange) cones." },
+    "n_pointer":      { "type": "integer", "minimum": 0, "description": "Count of pointer (directional) cones." },
+    "n_timing_start": { "type": "integer", "minimum": 0, "description": "Count of timing-start (green) cones." },
+    "n_timing_end":   { "type": "integer", "minimum": 0, "description": "Count of timing-end (red) cones." },
+    "n_gcp":          { "type": "integer", "minimum": 0, "description": "Count of GCP (blue) cones." },
 
     "bounds": {
       "description": "Axis-aligned bounding box of all cone centres in world space (metres). All four values are 0 when no cones are placed.",
@@ -88,84 +67,60 @@
     "standing": {
       "description": "Standing (orange) cone entries.",
       "type": "array",
-      "items": { "$ref": "#/$defs/coneEntry" }
+      "items": { "$ref": "#/$defs/base_cone" }
     },
     "pointers": {
-      "description": "Pointer (directional) cone entries. Each entry includes facing_deg.",
+      "description": "Pointer (directional) cone entries.",
       "type": "array",
-      "items": { "$ref": "#/$defs/pointerEntry" }
+      "items": { "$ref": "#/$defs/pointer_cone" }
     },
-    "greens": {
+    "timing_start": {
       "description": "Timing-start (green) cone entries.",
       "type": "array",
-      "items": { "$ref": "#/$defs/coneEntry" }
+      "items": { "$ref": "#/$defs/base_cone" }
     },
-    "reds": {
+    "timing_end": {
       "description": "Timing-end (red) cone entries.",
       "type": "array",
-      "items": { "$ref": "#/$defs/coneEntry" }
+      "items": { "$ref": "#/$defs/base_cone" }
     },
-    "blues": {
+    "gcp": {
       "description": "GCP (blue) cone entries.",
       "type": "array",
-      "items": { "$ref": "#/$defs/coneEntry" }
+      "items": { "$ref": "#/$defs/base_cone" }
     }
   },
 
   "$defs": {
-    "coneEntry": {
-      "description": "A single placed cone (non-directional types).",
+    "base_cone": {
+      "description": "A single placed cone.",
       "type": "object",
       "required": ["bx", "by", "type", "size"],
       "additionalProperties": false,
       "properties": {
-        "bx": {
-          "description": "World-space east position of the cone centre (metres).",
-          "type": "number"
-        },
-        "by": {
-          "description": "World-space north position of the cone centre (metres, +Y up).",
-          "type": "number"
-        },
+        "bx":   { "type": "number",  "description": "Blender X coordinate (metres, east positive)." },
+        "by":   { "type": "number",  "description": "Blender Y coordinate (metres, north positive)." },
         "type": {
-          "description": "Cone type.",
           "type": "string",
-          "enum": ["standing", "timing_start", "timing_end", "gcp"]
+          "enum": ["standing", "timing_start", "timing_end", "gcp"],
+          "description": "Cone role."
         },
-        "size": {
-          "description": "Height of the cone bounding box in canvas units (equals coneSettings.size for square cones).",
-          "type": "number",
-          "exclusiveMinimum": 0
-        }
+        "size": { "type": "integer", "minimum": 1, "description": "Cone bounding-box height in canvas units (equals coneSettings.size)." }
       }
     },
 
-    "pointerEntry": {
+    "pointer_cone": {
       "description": "A directional pointer cone.",
       "type": "object",
       "required": ["bx", "by", "type", "size", "facing_deg"],
       "additionalProperties": false,
       "properties": {
-        "bx": {
-          "description": "World-space east position of the cone centre (metres).",
-          "type": "number"
-        },
-        "by": {
-          "description": "World-space north position of the cone centre (metres, +Y up).",
-          "type": "number"
-        },
-        "type": {
-          "description": "Cone type — always 'pointer' in this array.",
-          "type": "string",
-          "const": "pointer"
-        },
-        "size": {
-          "description": "Height of the pointer bounding box in canvas units.",
-          "type": "number",
-          "exclusiveMinimum": 0
-        },
+        "bx":   { "type": "number", "description": "Blender X coordinate (metres, east positive)." },
+        "by":   { "type": "number", "description": "Blender Y coordinate (metres, north positive)." },
+        "type": { "type": "string", "const": "pointer" },
+        "size": { "type": "integer", "minimum": 1, "description": "Cone bounding-box height in canvas units." },
         "facing_deg": {
-          "description": "Direction the pointer tip faces, in degrees CCW from east (+X), range [0, 360). Rounded to 2 decimal places.",
+          "description": "Direction the pointer tip faces: degrees CCW from east (+X), range [0, 360). Rounded to 2 decimal places.",
           "type": "number",
           "minimum": 0,
           "exclusiveMaximum": 360

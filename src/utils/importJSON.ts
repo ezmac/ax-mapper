@@ -20,6 +20,10 @@ interface ImportData {
   transform: ScaleTransform
   standing?: ConeEntry[]
   pointers?: ConeEntry[]
+  timing_start?: ConeEntry[]
+  timing_end?: ConeEntry[]
+  gcp?: ConeEntry[]
+  // legacy field names from pre-alignment ax-mapper exports
   greens?: ConeEntry[]
   reds?: ConeEntry[]
   blues?: ConeEntry[]
@@ -66,9 +70,9 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
   const allEntries: Array<{ entry: ConeEntry; coneType: ConeType }> = []
   for (const entry of (data.standing ?? [])) allEntries.push({ entry, coneType: 'standing' })
   for (const entry of (data.pointers ?? [])) allEntries.push({ entry, coneType: 'pointer' })
-  for (const entry of (data.greens ?? []))   allEntries.push({ entry, coneType: 'timing_start' })
-  for (const entry of (data.reds ?? []))     allEntries.push({ entry, coneType: 'timing_end' })
-  for (const entry of (data.blues ?? []))    allEntries.push({ entry, coneType: 'gcp' })
+  for (const entry of (data.timing_start ?? data.greens ?? [])) allEntries.push({ entry, coneType: 'timing_start' })
+  for (const entry of (data.timing_end  ?? data.reds   ?? [])) allEntries.push({ entry, coneType: 'timing_end' })
+  for (const entry of (data.gcp         ?? data.blues  ?? [])) allEntries.push({ entry, coneType: 'gcp' })
 
   canvasAPI.run(() => {
     for (const { entry, coneType } of allEntries) {
