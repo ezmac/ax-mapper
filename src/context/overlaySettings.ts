@@ -1,7 +1,7 @@
 import { createContext, useContext } from 'react'
 
 interface OverlaySettings {
-  showGrid: boolean
+  gridSpacing: number  // feet; 0 = off
   imageUrl: string | null
   siteW: number   // feet
   siteH: number   // feet
@@ -11,7 +11,7 @@ interface OverlaySettings {
 }
 
 export const OverlaySettingsContext = createContext<OverlaySettings>({
-  showGrid: false,
+  gridSpacing: 0,
   imageUrl: null,
   siteW: 1000,
   siteH: 600,

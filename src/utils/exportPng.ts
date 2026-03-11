@@ -8,6 +8,7 @@ export async function exportPng(
   siteW: number,  // feet
   siteH: number,  // feet
   scale: number,  // metres per canvas unit
+  filename = 'ax_course',
 ) {
   const canvasW = siteW * 0.3048 / scale
   const canvasH = siteH * 0.3048 / scale
@@ -82,7 +83,7 @@ export async function exportPng(
   const url = URL.createObjectURL(finalBlob)
   const a = document.createElement('a')
   a.href = url
-  a.download = 'ax_course.png'
+  a.download = `${filename}.png`
   a.click()
   URL.revokeObjectURL(url)
 }

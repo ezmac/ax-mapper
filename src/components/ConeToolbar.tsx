@@ -170,9 +170,10 @@ function CountInput({ value, min = 1, max = 12, onChange }: {
 
 interface Props {
   toolManager: ToolManager | null
+  onSizeChange?: (newSize: number) => void
 }
 
-export function ConeToolbar({ toolManager }: Props) {
+export function ConeToolbar({ toolManager, onSizeChange }: Props) {
   const [activeTool, setActiveTool] = useState<string | null>(null)
   const [slalomCount, setSlalomCount] = useState(SlalomTool.coneCount)
   const [ptrCount, setPtrCount] = useState(PointerPairTool.pointerCount)
@@ -210,6 +211,7 @@ export function ConeToolbar({ toolManager }: Props) {
   function handleSizeChange(val: number) {
     coneSettings.size = val
     setConeSize(val)
+    onSizeChange?.(val)
   }
 
   const at = activeTool

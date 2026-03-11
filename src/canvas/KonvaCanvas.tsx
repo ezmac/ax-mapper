@@ -23,6 +23,8 @@ export interface KonvaCanvasHandle {
   stage: Konva.Stage
   canvasAPI: CanvasAPI
   toolManager: ToolManager
+  resizeSelected: (newSize: number) => void
+  resetCamera: () => void
 }
 
 interface Props {
@@ -107,7 +109,8 @@ export function KonvaCanvas({
     // ── Data layer ───────────────────────────────────────────────────────────
     const store   = new CanvasStore()
     const history = new HistoryStack()
-    const coneNodes = new Map<string, Konva.Group>()
+    const coneNodes    = new Map<string, Konva.Group>()
+    const coneNodeDims = new Map<string, { w: number; h: number }>()
 
     // ── Selection state ──────────────────────────────────────────────────────
     const selectedIds        = new Set<string>()
@@ -224,6 +227,7 @@ export function KonvaCanvas({
           selectedIds.delete(nid)
           node.destroy()
           coneNodes.delete(nid)
+          coneNodeDims.delete(nid)
         }
       }
 
@@ -232,9 +236,24 @@ export function KonvaCanvas({
         if (!node) {
           node = createConeNode(cone)
           coneNodes.set(cone.id, node)
+          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
           conesLayer.add(node)
           attachNodeHandlers(cone.id, node)
           applyMode(node, inSelectMode)
+        } else if (
+          coneNodeDims.get(cone.id)?.w !== cone.w ||
+          coneNodeDims.get(cone.id)?.h !== cone.h
+        ) {
+          // Dimensions changed — rebuild the node's visual children in place
+          const isSelected = selectedIds.has(cone.id)
+          node.destroy()
+          node = createConeNode(cone)
+          coneNodes.set(cone.id, node)
+          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
+          conesLayer.add(node)
+          attachNodeHandlers(cone.id, node)
+          applyMode(node, inSelectMode)
+          if (isSelected) addSelectionIndicator(node, cone.w, cone.h)
         } else {
           node.x(cone.x)
           node.y(cone.y)
@@ -487,7 +506,29 @@ export function KonvaCanvas({
     })
     ro.observe(container)
 
-    onReady({ stage, canvasAPI, toolManager })
+    // ── Resize selected cones ────────────────────────────────────────────────
+    function resizeSelected(newSize: number) {
+      if (selectedIds.size === 0) return
+      const snapshots = [...selectedIds]
+        .map(id => store.getById(id))
+        .filter((c): c is ConeData => c != null)
+      if (snapshots.length === 0) return
+      for (const snap of snapshots) {
+        const w = snap.coneType === 'pointer' ? Math.round(newSize * 1.6) : newSize
+        store.update(snap.id, { w, h: newSize })
+      }
+      history.push({
+        undo() { for (const s of snapshots) store.update(s.id, { w: s.w, h: s.h }) },
+        redo() {
+          for (const s of snapshots) {
+            const w = s.coneType === 'pointer' ? Math.round(newSize * 1.6) : newSize
+            store.update(s.id, { w, h: newSize })
+          }
+        },
+      })
+    }
+
+    onReady({ stage, canvasAPI, toolManager, resizeSelected, resetCamera: zoomToFit })
 
     return () => {
       window.removeEventListener('mousemove', onWindowMouseMove)
