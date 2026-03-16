@@ -115,6 +115,13 @@ export class BaseConeStampTool {
   onKeyDown(e: KeyboardEvent): void {
     const { x, y } = this.api.getPointerPagePoint()
 
+    if (e.key === ' ') {
+      e.preventDefault()
+      this.ghostRotation += Math.PI / 2
+      this.refresh(x, y)
+      return
+    }
+
     if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
       const step = e.shiftKey ? STEP_FINE : STEP_NORMAL
       this.ghostRotation += e.key === 'ArrowRight' ? step : -step

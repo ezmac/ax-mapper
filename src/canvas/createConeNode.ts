@@ -6,6 +6,7 @@ const C_MAGENTA = '#FF00FF'
 const C_GREEN   = '#22c55e'
 const C_RED     = '#ef4444'
 const C_BLUE    = '#3b82f6'
+const C_YELLOW  = '#F59E0B'
 
 /** Build a Konva.Group representing a single cone. */
 export function createConeNode(data: ConeData): Konva.Group {
@@ -54,6 +55,16 @@ export function createConeNode(data: ConeData): Konva.Group {
       group.add(new Konva.Circle({ x: cx, y: cy, radius: rad * 0.3, fill: 'white' }))
       break
     }
+
+    case 'car_start':
+      // Pentagon arrow pointing right: tip at (w, h/2), notch at 70% on top/bottom
+      group.add(new Konva.Line({
+        points: [w, h / 2,  w * 0.65, 0,  0, 0,  0, h,  w * 0.65, h],
+        closed: true,
+        fill: C_YELLOW,
+        strokeEnabled: false,
+      }))
+      break
   }
 
   return group

@@ -6,13 +6,14 @@ import { coneSettings } from '../settings'
 
 // ─── mini SVG icon helpers ────────────────────────────────────────────────────
 
-type ConeT = 'standing' | 'pointer' | 'timing_start' | 'timing_end' | 'gcp'
+type ConeT = 'standing' | 'pointer' | 'timing_start' | 'timing_end' | 'gcp' | 'car_start'
 
 const C_ORANGE  = '#FF8C00'
 const C_MAGENTA = '#FF00FF'
 const C_GREEN   = '#22c55e'
 const C_RED     = '#ef4444'
 const C_BLUE    = '#3b82f6'
+const C_YELLOW  = '#F59E0B'
 
 function renderMiniCone(type: ConeT, w: number, h: number) {
   const r = Math.min(w, h) * 0.12
@@ -25,6 +26,8 @@ function renderMiniCone(type: ConeT, w: number, h: number) {
       const cx = w/2, cy = h/2, rad = Math.min(w,h)/2*0.92
       return <><circle cx={cx} cy={cy} r={rad} fill={C_BLUE} /><circle cx={cx} cy={cy} r={rad*0.3} fill="white" /></>
     }
+    case 'car_start':
+      return <polygon points={`${w},${h/2} ${w*0.65},0 0,0 0,${h} ${w*0.65},${h}`} fill={C_YELLOW} />
   }
 }
 
@@ -72,6 +75,19 @@ function MiniSlalom({ n = 4, size = 5 }: { n?: number; size?: number }) {
           {renderMiniCone('standing', size, size)}
         </g>
       ))}
+    </svg>
+  )
+}
+
+function MiniAlign({ size = 14 }: { size?: number }) {
+  const r = size * 0.14
+  const y = size / 2
+  return (
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <line x1={r} y1={y} x2={size - r} y2={y} stroke="#9ca3af" strokeWidth={1} />
+      <circle cx={r}        cy={y} r={r} fill={C_ORANGE} />
+      <circle cx={size / 2} cy={y} r={r} fill={C_MAGENTA} />
+      <circle cx={size - r} cy={y} r={r} fill={C_ORANGE} />
     </svg>
   )
 }
@@ -171,9 +187,10 @@ function CountInput({ value, min = 1, max = 12, onChange }: {
 interface Props {
   toolManager: ToolManager | null
   onSizeChange?: (newSize: number) => void
+  onAlign?: () => void
 }
 
-export function ConeToolbar({ toolManager, onSizeChange }: Props) {
+export function ConeToolbar({ toolManager, onSizeChange, onAlign }: Props) {
   const [activeTool, setActiveTool] = useState<string | null>(null)
   const [slalomCount, setSlalomCount] = useState(SlalomTool.coneCount)
   const [ptrCount, setPtrCount] = useState(PointerPairTool.pointerCount)
@@ -236,6 +253,11 @@ export function ConeToolbar({ toolManager, onSizeChange }: Props) {
           onClick={() => activate(null)}
         />
         <ToolBtn
+          icon={<MiniAlign />}
+          label="Align (L)" active={false}
+          onClick={() => onAlign?.()}
+        />
+        <ToolBtn
           icon={<MiniCone type="standing" />}
           label="Standing" active={at === 'standing-cone'}
           onClick={() => activate('standing-cone')}
@@ -259,6 +281,11 @@ export function ConeToolbar({ toolManager, onSizeChange }: Props) {
           icon={<MiniCone type="gcp" />}
           label="GCP" active={at === 'gcp'}
           onClick={() => activate('gcp')}
+        />
+        <ToolBtn
+          icon={<MiniCone type="car_start" size={18} />}
+          label="Car Start" active={at === 'car-start'}
+          onClick={() => activate('car-start')}
         />
 
         <SectionLabel>Compound</SectionLabel>

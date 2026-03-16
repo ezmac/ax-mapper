@@ -1,4 +1,4 @@
-export type ConeType = 'standing' | 'pointer' | 'timing_start' | 'timing_end' | 'gcp'
+export type ConeType = 'standing' | 'pointer' | 'timing_start' | 'timing_end' | 'gcp' | 'car_start'
 
 export interface ConeData {
   id: string

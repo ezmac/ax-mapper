@@ -282,6 +282,7 @@ export default function App() {
             <ConeToolbar
             toolManager={canvasHandle?.toolManager ?? null}
             onSizeChange={newSize => handleRef.current?.resizeSelected(newSize)}
+            onAlign={() => handleRef.current?.alignSelected()}
           />
             <GridOverlay />
             <HelpOverlay />
