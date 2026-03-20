@@ -24,6 +24,15 @@ export interface CanvasAPI {
 
   /** Current pointer position in page (canvas) coordinates. */
   getPointerPagePoint(): { x: number; y: number }
+
+  /** Subscribe to cone store changes. Returns unsubscribe function. */
+  onConesChange(fn: () => void): () => void
+
+  /** Remove all placed cones without adding to undo history. */
+  clearAllCones(): void
+
+  /** Replace all cones directly (bypasses undo history — for project loading). */
+  loadCones(cones: ConeData[]): void
 }
 
 export function createCanvasAPI(
@@ -92,6 +101,19 @@ export function createCanvasAPI(
         x: (pos.x - sp.x) / scale,
         y: (pos.y - sp.y) / scale,
       }
+    },
+
+    onConesChange(fn) {
+      return store.onChange(fn)
+    },
+
+    clearAllCones() {
+      const ids = store.getAll().map(c => c.id)
+      if (ids.length) store.remove(ids)
+    },
+
+    loadCones(cones) {
+      store.restore(cones.map(c => ({ ...c, isGhost: false })))
     },
   }
 }

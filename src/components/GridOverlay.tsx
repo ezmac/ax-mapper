@@ -1,16 +1,14 @@
 import { useOverlaySettings } from '../context/overlaySettings'
 
-const GRID_FEET = 20
-
 export function GridOverlay() {
-  const { showGrid, scale, camera } = useOverlaySettings()
+  const { gridSpacing, scale, camera } = useOverlaySettings()
 
-  if (!showGrid) return null
+  if (!gridSpacing) return null
 
   const { x, y, z } = camera
 
-  // Convert 20 feet → canvas units → screen pixels
-  const gridUnits = GRID_FEET * 0.3048 / scale
+  // Convert feet → canvas units → screen pixels
+  const gridUnits = gridSpacing * 0.3048 / scale
   const gridPx = gridUnits * z
 
   // Stage transform: screenX = pageX * z + x

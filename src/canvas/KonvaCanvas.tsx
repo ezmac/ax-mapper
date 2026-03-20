@@ -18,11 +18,15 @@ import { TimingStartGateTool } from '../tools/TimingStartGateTool'
 import { TimingEndGateTool } from '../tools/TimingEndGateTool'
 import { PointerPairTool } from '../tools/PointerPairTool'
 import { FinishChuteTool } from '../tools/FinishChuteTool'
+import { CarStartTool } from '../tools/CarStartTool'
 
 export interface KonvaCanvasHandle {
   stage: Konva.Stage
   canvasAPI: CanvasAPI
   toolManager: ToolManager
+  resizeSelected: (newSize: number) => void
+  alignSelected: () => void
+  resetCamera: () => void
 }
 
 interface Props {
@@ -107,7 +111,8 @@ export function KonvaCanvas({
     // ── Data layer ───────────────────────────────────────────────────────────
     const store   = new CanvasStore()
     const history = new HistoryStack()
-    const coneNodes = new Map<string, Konva.Group>()
+    const coneNodes    = new Map<string, Konva.Group>()
+    const coneNodeDims = new Map<string, { w: number; h: number }>()
 
     // ── Selection state ──────────────────────────────────────────────────────
     const selectedIds        = new Set<string>()
@@ -224,6 +229,7 @@ export function KonvaCanvas({
           selectedIds.delete(nid)
           node.destroy()
           coneNodes.delete(nid)
+          coneNodeDims.delete(nid)
         }
       }
 
@@ -232,9 +238,24 @@ export function KonvaCanvas({
         if (!node) {
           node = createConeNode(cone)
           coneNodes.set(cone.id, node)
+          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
           conesLayer.add(node)
           attachNodeHandlers(cone.id, node)
           applyMode(node, inSelectMode)
+        } else if (
+          coneNodeDims.get(cone.id)?.w !== cone.w ||
+          coneNodeDims.get(cone.id)?.h !== cone.h
+        ) {
+          // Dimensions changed — rebuild the node's visual children in place
+          const isSelected = selectedIds.has(cone.id)
+          node.destroy()
+          node = createConeNode(cone)
+          coneNodes.set(cone.id, node)
+          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
+          conesLayer.add(node)
+          attachNodeHandlers(cone.id, node)
+          applyMode(node, inSelectMode)
+          if (isSelected) addSelectionIndicator(node, cone.w, cone.h)
         } else {
           node.x(cone.x)
           node.y(cone.y)
@@ -262,6 +283,7 @@ export function KonvaCanvas({
       new TimingStartTool(canvasAPI),
       new TimingEndTool(canvasAPI),
       new GcpTool(canvasAPI),
+      new CarStartTool(canvasAPI),
       new GateTool(canvasAPI),
       new SlalomTool(canvasAPI),
       new TimingStartGateTool(canvasAPI),
@@ -474,6 +496,11 @@ export function KonvaCanvas({
           conesLayer.batchDraw()
           return
         }
+        if (e.key === 'l' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+          e.preventDefault()
+          alignSelectedCones()
+          return
+        }
       }
 
       toolManager.handleKeyDown(e)
@@ -487,7 +514,132 @@ export function KonvaCanvas({
     })
     ro.observe(container)
 
-    onReady({ stage, canvasAPI, toolManager })
+    // ── Resize selected cones ────────────────────────────────────────────────
+    function resizeSelected(newSize: number) {
+      if (selectedIds.size === 0) return
+      const snapshots = [...selectedIds]
+        .map(id => store.getById(id))
+        .filter((c): c is ConeData => c != null)
+      if (snapshots.length === 0) return
+      for (const snap of snapshots) {
+        const w = snap.coneType === 'pointer' ? Math.round(newSize * 1.6) : newSize
+        store.update(snap.id, { w, h: newSize })
+      }
+      history.push({
+        undo() { for (const s of snapshots) store.update(s.id, { w: s.w, h: s.h }) },
+        redo() {
+          for (const s of snapshots) {
+            const w = s.coneType === 'pointer' ? Math.round(newSize * 1.6) : newSize
+            store.update(s.id, { w, h: newSize })
+          }
+        },
+      })
+    }
+
+    // ── Align selected cones ─────────────────────────────────────────────────
+    function alignSelectedCones() {
+      if (selectedIds.size < 2) return
+
+      const cones = [...selectedIds]
+        .map(id => store.getById(id))
+        .filter((c): c is ConeData => c != null)
+      if (cones.length < 2) return
+
+      // (x, y) is the top-left pivot before rotation; compute the visual centre
+      // so that all geometry (distance, projection, placement) uses the same point
+      // the stamp tool pins to the cursor — otherwise rotated pointer cones are
+      // systematically offset and the computed angle is wrong.
+      function visualCenter(c: ConeData) {
+        const r = c.rotation
+        return {
+          cx: c.x + Math.cos(r) * c.w / 2 - Math.sin(r) * c.h / 2,
+          cy: c.y + Math.sin(r) * c.w / 2 + Math.cos(r) * c.h / 2,
+        }
+      }
+      // Back-compute stored top-left from a target visual centre + new rotation
+      function storedFromCenter(cx: number, cy: number, r: number, w: number, h: number) {
+        return {
+          x: cx - Math.cos(r) * w / 2 + Math.sin(r) * h / 2,
+          y: cy - Math.sin(r) * w / 2 - Math.cos(r) * h / 2,
+        }
+      }
+
+      const withCenters = cones.map(c => ({ cone: c, ...visualCenter(c) }))
+
+      // Find the two cones with the greatest distance between visual centres
+      let maxDist = -1
+      let A = withCenters[0], B = withCenters[1]
+      for (let i = 0; i < withCenters.length; i++) {
+        for (let j = i + 1; j < withCenters.length; j++) {
+          const dx = withCenters[j].cx - withCenters[i].cx
+          const dy = withCenters[j].cy - withCenters[i].cy
+          const d = Math.sqrt(dx * dx + dy * dy)
+          if (d > maxDist) { maxDist = d; A = withCenters[i]; B = withCenters[j] }
+        }
+      }
+
+      // Line direction (from visual centres — now angle is exact)
+      const θ = Math.atan2(B.cy - A.cy, B.cx - A.cx)
+      const cosθ = Math.cos(θ), sinθ = Math.sin(θ)
+
+      // Project visual centres onto A→B axis, sort, redistribute at equal spacing
+      const sorted = withCenters
+        .map(wc => ({ wc, t: (wc.cx - A.cx) * cosθ + (wc.cy - A.cy) * sinθ }))
+        .sort((a, b) => a.t - b.t)
+
+      const N = sorted.length
+      const spacing = N > 1 ? maxDist / (N - 1) : 0
+
+      // Determine pointer rotation
+      const endA = sorted[0].wc.cone
+      const endB = sorted[N - 1].wc.cone
+      const endAStanding = endA.coneType !== 'pointer'
+      const endBStanding = endB.coneType !== 'pointer'
+
+      let pointerRotation: number | null = null
+      const pointers = cones.filter(c => c.coneType === 'pointer')
+
+      if (pointers.length > 0) {
+        if (endAStanding && !endBStanding) {
+          // Standing end is A → pointers face A (B→A direction)
+          pointerRotation = θ + Math.PI
+        } else if (!endAStanding && endBStanding) {
+          // Standing end is B → pointers face B (A→B direction)
+          pointerRotation = θ
+        } else {
+          // Both or neither endpoints standing → majority vote
+          let votesAB = 0, votesBA = 0
+          for (const p of pointers) {
+            const diffAB = Math.abs(((p.rotation - θ + 3 * Math.PI) % (2 * Math.PI)) - Math.PI)
+            const diffBA = Math.abs(((p.rotation - θ - Math.PI + 3 * Math.PI) % (2 * Math.PI)) - Math.PI)
+            if (diffAB < diffBA) votesAB++; else votesBA++
+          }
+          pointerRotation = votesAB >= votesBA ? θ : θ + Math.PI
+        }
+      }
+
+      // Compute new state: place visual centres on the line, back-compute stored position
+      const oldState = cones.map(c => ({ id: c.id, x: c.x, y: c.y, rotation: c.rotation }))
+      const newState = sorted.map(({ wc }, i) => {
+        const cone = wc.cone
+        const newRotation = cone.coneType === 'pointer' && pointerRotation !== null
+          ? pointerRotation
+          : cone.rotation
+        const targetCx = A.cx + i * spacing * cosθ
+        const targetCy = A.cy + i * spacing * sinθ
+        const { x, y } = storedFromCenter(targetCx, targetCy, newRotation, cone.w, cone.h)
+        return { id: cone.id, x, y, rotation: newRotation }
+      })
+
+      for (const s of newState) store.update(s.id, { x: s.x, y: s.y, rotation: s.rotation })
+
+      history.push({
+        undo() { for (const s of oldState) store.update(s.id, { x: s.x, y: s.y, rotation: s.rotation }) },
+        redo() { for (const s of newState) store.update(s.id, { x: s.x, y: s.y, rotation: s.rotation }) },
+      })
+    }
+
+    onReady({ stage, canvasAPI, toolManager, resizeSelected, alignSelected: alignSelectedCones, resetCamera: zoomToFit })
 
     return () => {
       window.removeEventListener('mousemove', onWindowMouseMove)
@@ -511,7 +663,7 @@ export function KonvaCanvas({
       img.onload = () => {
         if (!bgLayerRef.current) return
         bgLayer.destroyChildren()
-        bgLayer.add(new Konva.Image({ x: 0, y: 0, width: canvasW, height: canvasH, image: img }))
+        bgLayer.add(new Konva.Image({ x: 0, y: 0, width: canvasW, height: canvasH, image: img, listening: false }))
         bgLayer.batchDraw()
       }
       img.src = imageUrl
