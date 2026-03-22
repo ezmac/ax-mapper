@@ -174,8 +174,7 @@ function CountInput({ value, min = 1, max = 12, onChange }: {
           width: 26, textAlign: 'center', fontSize: 11, fontWeight: 700,
           border: '1px solid #d1d5db', borderRadius: 4, padding: '1px 0',
           background: 'white', color: '#111827',
-          MozAppearance: 'textfield',
-        } as React.CSSProperties}
+        }}
       />
       <button style={btnStyle} onClick={() => onChange(Math.min(max, value + 1))}>+</button>
     </div>
@@ -329,7 +328,7 @@ export function ConeToolbar({ toolManager, onSizeChange, onAlign }: Props) {
 
         {/* ── cone size control ── */}
         <SectionLabel>Size</SectionLabel>
-        <CountInput value={coneSize} min={1} max={20} onChange={handleSizeChange} />
+        <CountInput value={coneSize} min={1} max={35} onChange={handleSizeChange} />
       </div>
     </div>
   )
