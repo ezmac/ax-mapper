@@ -1,4 +1,4 @@
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useCallback } from 'react'
 import { KonvaCanvas } from './canvas/KonvaCanvas'
 import type { KonvaCanvasHandle } from './canvas/KonvaCanvas'
 import { ConeToolbar } from './components/ConeToolbar'
@@ -9,6 +9,7 @@ import { MeasureOverlay } from './components/MeasureOverlay'
 import { OverlaySettingsContext } from './context/overlaySettings'
 import { projectStore } from './services/ProjectStore'
 import type { ProjectData } from './services/ProjectStore'
+import type { ConeData } from './canvas/ConeData'
 
 const DEFAULT_SCALE = 0.3048
 const DEFAULT_SITE_W = 1000
@@ -44,6 +45,7 @@ export default function App() {
   const [showBackground, setShowBackground] = useState(initial.showBackground)
   const [measuring, setMeasuring] = useState(false)
   const [camera, setCamera] = useState({ x: 0, y: 0, z: 1 })
+  const [selectedCones, setSelectedCones] = useState<ConeData[]>([])
   const [projectsList, setProjectsList] = useState<ProjectData[]>(() => projectStore.getAll())
 
   // Refs mirror state for use in callbacks / debounced timers
@@ -119,6 +121,10 @@ export default function App() {
   // Canvas dimensions in canvas-space units
   const canvasW = siteW * 0.3048 / scale
   const canvasH = siteH * 0.3048 / scale
+
+  const handleSelectionChange = useCallback((cones: ConeData[]) => {
+    setSelectedCones(cones)
+  }, [])
 
   function handleMeasureScale(newScale: number) {
     setSiteW(Math.round(siteW * newScale / scale))
@@ -239,6 +245,19 @@ export default function App() {
     setProjectsList([...projectStore.getAll()])
   }
 
+  // Distance badge: shown when exactly 2 cones are selected
+  let distanceFt: number | null = null
+  if (selectedCones.length === 2) {
+    const [a, b] = selectedCones
+    const rA = a.rotation, rB = b.rotation
+    const cxA = a.x + Math.cos(rA) * a.w / 2 - Math.sin(rA) * a.h / 2
+    const cyA = a.y + Math.sin(rA) * a.w / 2 + Math.cos(rA) * a.h / 2
+    const cxB = b.x + Math.cos(rB) * b.w / 2 - Math.sin(rB) * b.h / 2
+    const cyB = b.y + Math.sin(rB) * b.w / 2 + Math.cos(rB) * b.h / 2
+    const distPx = Math.sqrt((cxB - cxA) ** 2 + (cyB - cyA) ** 2)
+    distanceFt = distPx * scale / 0.3048
+  }
+
   return (
     <OverlaySettingsContext.Provider value={{
       gridSpacing, imageUrl, siteW, siteH, scale, showBackground, camera,
@@ -276,6 +295,7 @@ export default function App() {
             canvasH={canvasH}
             onCameraChange={(x, y, z) => setCamera({ x, y, z })}
             onReady={handleCanvasReady}
+            onSelectionChange={handleSelectionChange}
           />
           {/* React overlays sit on top of the Konva stage */}
           <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}>
@@ -286,6 +306,19 @@ export default function App() {
           />
             <GridOverlay />
             <HelpOverlay />
+            {distanceFt !== null && (
+              <div style={{
+                position: 'absolute', bottom: 16, right: 52,
+                background: 'rgba(15,23,42,0.85)', color: '#f1f5f9',
+                borderRadius: 8, padding: '6px 14px',
+                fontSize: 13, fontWeight: 600, letterSpacing: '0.02em',
+                backdropFilter: 'blur(4px)',
+                border: '1px solid rgba(148,163,184,0.2)',
+                pointerEvents: 'none',
+              }}>
+                {distanceFt.toFixed(1)} FT
+              </div>
+            )}
           </div>
           <MeasureOverlay
             active={measuring}

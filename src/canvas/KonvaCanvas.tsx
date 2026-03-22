@@ -36,6 +36,7 @@ interface Props {
   canvasH: number
   onCameraChange: (x: number, y: number, z: number) => void
   onReady: (handle: KonvaCanvasHandle) => void
+  onSelectionChange?: (cones: ConeData[]) => void
 }
 
 // ── Selection visual helpers ─────────────────────────────────────────────────
@@ -77,6 +78,7 @@ export function KonvaCanvas({
   canvasH,
   onCameraChange,
   onReady,
+  onSelectionChange,
 }: Props) {
   const containerRef   = useRef<HTMLDivElement>(null)
   const rubberBandRef  = useRef<HTMLDivElement>(null)
@@ -85,6 +87,8 @@ export function KonvaCanvas({
 
   const onCameraChangeRef = useRef(onCameraChange)
   onCameraChangeRef.current = onCameraChange
+  const onSelectionChangeRef = useRef(onSelectionChange)
+  onSelectionChangeRef.current = onSelectionChange
   const canvasWRef = useRef(canvasW)
   const canvasHRef = useRef(canvasH)
   canvasWRef.current = canvasW
@@ -118,6 +122,18 @@ export function KonvaCanvas({
     const selectedIds        = new Set<string>()
     const dragStartPositions = new Map<string, { x: number; y: number }>()
 
+    let notifySelectionPending = false
+    function scheduleSelectionNotify() {
+      if (notifySelectionPending) return
+      notifySelectionPending = true
+      Promise.resolve().then(() => {
+        notifySelectionPending = false
+        onSelectionChangeRef.current?.(
+          [...selectedIds].map(id => store.getById(id)).filter((c): c is ConeData => c != null)
+        )
+      })
+    }
+
     function setSelected(id: string, on: boolean) {
       const node = coneNodes.get(id)
       if (!node) return
@@ -129,6 +145,7 @@ export function KonvaCanvas({
         selectedIds.delete(id)
         removeSelectionIndicator(node)
       }
+      scheduleSelectionNotify()
     }
 
     function deselectAll() {

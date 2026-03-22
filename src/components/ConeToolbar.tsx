@@ -329,7 +329,7 @@ export function ConeToolbar({ toolManager, onSizeChange, onAlign }: Props) {
 
         {/* ── cone size control ── */}
         <SectionLabel>Size</SectionLabel>
-        <CountInput value={coneSize} min={1} max={8} onChange={handleSizeChange} />
+        <CountInput value={coneSize} min={1} max={20} onChange={handleSizeChange} />
       </div>
     </div>
   )
