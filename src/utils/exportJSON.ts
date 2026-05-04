@@ -27,51 +27,50 @@ interface ExportData {
   timing_start: ConeEntry[]
   timing_end: ConeEntry[]
   gcp: ConeEntry[]
+  stage_cone_pos?: [number, number]
 }
 
 export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): ExportData {
-  const placed = cones.filter(c => !c.isGhost)
+  const placed = cones.filter(c => !c.isGhost && !c.noExport)
 
   const standing: ConeEntry[] = []
   const pointers: ConeEntry[] = []
   const timing_start: ConeEntry[] = []
   const timing_end: ConeEntry[] = []
   const gcp: ConeEntry[] = []
+  let stageConePosExport: [number, number] | undefined
 
   let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
 
   for (const cone of placed) {
-    // Page-space centre: rotation is applied around the top-left (x,y) origin.
-    //   cx = cos(θ)·w/2 − sin(θ)·h/2 + x
-    //   cy = sin(θ)·w/2 + cos(θ)·h/2 + y
-    const θ  = cone.rotation
-    const w  = cone.w
-    const h  = cone.h
-    const cx = Math.cos(θ) * w / 2 - Math.sin(θ) * h / 2 + cone.x
-    const cy = Math.sin(θ) * w / 2 + Math.cos(θ) * h / 2 + cone.y
-
+    // cone.x,y is the centre in canvas space
     // Blender space: bx = east, by = north (+Y up, so canvas Y is flipped)
-    const bx = cx * scaleMetresPerUnit
-    const by = -cy * scaleMetresPerUnit
+    const bx = cone.x * scaleMetresPerUnit
+    const by = -cone.y * scaleMetresPerUnit
+    const θ  = cone.rotation
 
     xmin = Math.min(xmin, bx); xmax = Math.max(xmax, bx)
     ymin = Math.min(ymin, by); ymax = Math.max(ymax, by)
 
-    const entry: ConeEntry = { bx, by, type: cone.coneType, size: h }
+    if (cone.coneType === 'car_start') {
+      stageConePosExport = [bx, by]
+    } else {
+      const entry: ConeEntry = { bx, by, type: cone.coneType, size: cone.h }
 
-    if (cone.coneType === 'pointer') {
-      // Canvas rotation: radians CW (Y-down screen space).
-      // Blender facing_deg: CCW from +X (east). Flip sign to convert.
-      entry.facing_deg = Math.round(((-θ * 180 / Math.PI) + 360) % 360 * 100) / 100
-      pointers.push(entry)
-    } else if (cone.coneType === 'standing') {
-      standing.push(entry)
-    } else if (cone.coneType === 'timing_start') {
-      timing_start.push(entry)
-    } else if (cone.coneType === 'timing_end') {
-      timing_end.push(entry)
-    } else if (cone.coneType === 'gcp') {
-      gcp.push(entry)
+      if (cone.coneType === 'pointer') {
+        // Canvas rotation: radians CW (Y-down screen space).
+        // Blender facing_deg: CCW from +X (east). Flip sign to convert.
+        entry.facing_deg = Math.round(((-θ * 180 / Math.PI) + 360) % 360 * 100) / 100
+        pointers.push(entry)
+      } else if (cone.coneType === 'standing') {
+        standing.push(entry)
+      } else if (cone.coneType === 'timing_start') {
+        timing_start.push(entry)
+      } else if (cone.coneType === 'timing_end') {
+        timing_end.push(entry)
+      } else if (cone.coneType === 'gcp') {
+        gcp.push(entry)
+      }
     }
   }
 
@@ -79,7 +78,7 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
     xmin = xmax = ymin = ymax = 0
   }
 
-  return {
+  const result: ExportData = {
     transform: { type: 'scale', scale: scaleMetresPerUnit, ox: 0, oy: 0 },
     pointer_source: 'magenta',
     n_standing: standing.length,
@@ -94,4 +93,10 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
     timing_end,
     gcp,
   }
+
+  if (stageConePosExport) {
+    result.stage_cone_pos = stageConePosExport
+  }
+
+  return result
 }

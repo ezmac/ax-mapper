@@ -19,6 +19,8 @@ import { TimingEndGateTool } from '../tools/TimingEndGateTool'
 import { PointerPairTool } from '../tools/PointerPairTool'
 import { FinishChuteTool } from '../tools/FinishChuteTool'
 import { CarStartTool } from '../tools/CarStartTool'
+import { FreehandPathTool } from '../tools/FreehandPathTool'
+import type { PathData } from './PathData'
 
 export interface KonvaCanvasHandle {
   stage: Konva.Stage
@@ -27,6 +29,10 @@ export interface KonvaCanvasHandle {
   resizeSelected: (newSize: number) => void
   alignSelected: () => void
   resetCamera: () => void
+  getPaths: () => PathData[]
+  loadPaths: (paths: PathData[]) => void
+  clearAllPaths: () => void
+  onPathsChange: (fn: () => void) => void
 }
 
 interface Props {
@@ -107,10 +113,11 @@ export function KonvaCanvas({
     stageRef.current = stage
 
     const bgLayer    = new Konva.Layer()
+    const pathLayer  = new Konva.Layer()
     const conesLayer = new Konva.Layer()
     const ghostLayer = new Konva.Layer()
     bgLayerRef.current = bgLayer
-    stage.add(bgLayer, conesLayer, ghostLayer)
+    stage.add(bgLayer, pathLayer, conesLayer, ghostLayer)
 
     // ── Data layer ───────────────────────────────────────────────────────────
     const store   = new CanvasStore()
@@ -292,6 +299,39 @@ export function KonvaCanvas({
 
     const canvasAPI = createCanvasAPI(store, history, () => stageRef.current, renderGhosts)
 
+    // ── Path store ───────────────────────────────────────────────────────────
+    let paths: PathData[] = []
+    const pathListeners: Array<() => void> = []
+    function notifyPaths() { for (const fn of pathListeners) fn() }
+
+    function renderPath(data: PathData) {
+      const line = new Konva.Line({
+        id: data.id,
+        points: data.points,
+        stroke: '#ef4444',
+        strokeWidth: 2,
+        tension: 0.5,
+        lineCap: 'round',
+        lineJoin: 'round',
+        listening: false,
+      })
+      pathLayer.add(line)
+      pathLayer.batchDraw()
+    }
+
+    function addPath(data: PathData) {
+      paths.push(data)
+      renderPath(data)
+      notifyPaths()
+    }
+
+    function removePath(id: string) {
+      paths = paths.filter(p => p.id !== id)
+      pathLayer.findOne(`#${id}`)?.destroy()
+      pathLayer.batchDraw()
+      notifyPaths()
+    }
+
     // ── Tool manager ─────────────────────────────────────────────────────────
     const toolManager = new ToolManager()
     const toolInstances = [
@@ -309,6 +349,21 @@ export function KonvaCanvas({
       new FinishChuteTool(canvasAPI),
     ]
     for (const t of toolInstances) toolManager.register(t)
+
+    const freehandPathTool = new FreehandPathTool(
+      () => canvasAPI.getPointerPagePoint(),
+      pathLayer,
+      (points) => {
+        const id = crypto.randomUUID()
+        const pathData: PathData = { id, points }
+        addPath(pathData)
+        history.push({
+          undo() { removePath(id) },
+          redo() { addPath(pathData) },
+        })
+      },
+    )
+    toolManager.register(freehandPathTool)
 
     toolManager.onToolChange(toolId => {
       container.style.cursor = toolId ? 'crosshair' : 'default'
@@ -371,6 +426,11 @@ export function KonvaCanvas({
       }
 
       if (e.evt.button !== 0) return
+
+      if (toolManager.currentToolId !== null) {
+        toolManager.handleMouseDown()
+      }
+
       lmbDownPos = { x: e.evt.clientX, y: e.evt.clientY }
 
       // In select mode, track whether mousedown hit the background (for rubber band)
@@ -428,6 +488,10 @@ export function KonvaCanvas({
       }
 
       if (e.button !== 0 || !lmbDownPos) return
+
+      if (toolManager.currentToolId !== null) {
+        toolManager.handleMouseUp()
+      }
 
       const dist = Math.hypot(e.clientX - lmbDownPos.x, e.clientY - lmbDownPos.y)
       const wasClick = dist < CLICK_DIST
@@ -518,6 +582,26 @@ export function KonvaCanvas({
           alignSelectedCones()
           return
         }
+        if (selectedIds.size === 1 && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.key === ' ')) {
+          e.preventDefault()
+          const [id] = selectedIds
+          const cone = store.getById(id)
+          if (cone) {
+            const STEP_NORMAL = Math.PI / 12
+            const STEP_FINE   = Math.PI / 180
+            const delta = e.key === ' '
+              ? Math.PI / 2
+              : (e.key === 'ArrowRight' ? 1 : -1) * (e.shiftKey ? STEP_FINE : STEP_NORMAL)
+            const oldRot = cone.rotation
+            const newRot = oldRot + delta
+            store.update(id, { rotation: newRot })
+            history.push({
+              undo() { store.update(id, { rotation: oldRot }) },
+              redo() { store.update(id, { rotation: newRot }) },
+            })
+          }
+          return
+        }
       }
 
       toolManager.handleKeyDown(e)
@@ -562,26 +646,8 @@ export function KonvaCanvas({
         .filter((c): c is ConeData => c != null)
       if (cones.length < 2) return
 
-      // (x, y) is the top-left pivot before rotation; compute the visual centre
-      // so that all geometry (distance, projection, placement) uses the same point
-      // the stamp tool pins to the cursor — otherwise rotated pointer cones are
-      // systematically offset and the computed angle is wrong.
-      function visualCenter(c: ConeData) {
-        const r = c.rotation
-        return {
-          cx: c.x + Math.cos(r) * c.w / 2 - Math.sin(r) * c.h / 2,
-          cy: c.y + Math.sin(r) * c.w / 2 + Math.cos(r) * c.h / 2,
-        }
-      }
-      // Back-compute stored top-left from a target visual centre + new rotation
-      function storedFromCenter(cx: number, cy: number, r: number, w: number, h: number) {
-        return {
-          x: cx - Math.cos(r) * w / 2 + Math.sin(r) * h / 2,
-          y: cy - Math.sin(r) * w / 2 - Math.cos(r) * h / 2,
-        }
-      }
-
-      const withCenters = cones.map(c => ({ cone: c, ...visualCenter(c) }))
+      // x,y is already the centre
+      const withCenters = cones.map(c => ({ cone: c, cx: c.x, cy: c.y }))
 
       // Find the two cones with the greatest distance between visual centres
       let maxDist = -1
@@ -642,10 +708,7 @@ export function KonvaCanvas({
         const newRotation = cone.coneType === 'pointer' && pointerRotation !== null
           ? pointerRotation
           : cone.rotation
-        const targetCx = A.cx + i * spacing * cosθ
-        const targetCy = A.cy + i * spacing * sinθ
-        const { x, y } = storedFromCenter(targetCx, targetCy, newRotation, cone.w, cone.h)
-        return { id: cone.id, x, y, rotation: newRotation }
+        return { id: cone.id, x: A.cx + i * spacing * cosθ, y: A.cy + i * spacing * sinθ, rotation: newRotation }
       })
 
       for (const s of newState) store.update(s.id, { x: s.x, y: s.y, rotation: s.rotation })
@@ -656,7 +719,27 @@ export function KonvaCanvas({
       })
     }
 
-    onReady({ stage, canvasAPI, toolManager, resizeSelected, alignSelected: alignSelectedCones, resetCamera: zoomToFit })
+    onReady({
+      stage,
+      canvasAPI,
+      toolManager,
+      resizeSelected,
+      alignSelected: alignSelectedCones,
+      resetCamera: zoomToFit,
+      getPaths: () => [...paths],
+      loadPaths: (incoming) => {
+        paths = []
+        pathLayer.destroyChildren()
+        for (const p of incoming) addPath(p)
+      },
+      clearAllPaths: () => {
+        paths = []
+        pathLayer.destroyChildren()
+        pathLayer.batchDraw()
+        notifyPaths()
+      },
+      onPathsChange: (fn) => { pathListeners.push(fn) },
+    })
 
     return () => {
       window.removeEventListener('mousemove', onWindowMouseMove)

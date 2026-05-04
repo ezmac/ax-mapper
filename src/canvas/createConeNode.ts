@@ -17,6 +17,8 @@ export function createConeNode(data: ConeData): Konva.Group {
     id: data.id,
     x,
     y,
+    offsetX: w / 2,
+    offsetY: h / 2,
     rotation: rotation * (180 / Math.PI), // Konva uses degrees
     opacity,
     // listening defaults to true; KonvaCanvas sets it based on tool mode
