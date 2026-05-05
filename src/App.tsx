@@ -7,38 +7,21 @@ import { HelpOverlay } from './components/HelpOverlay'
 import { TopBar } from './components/TopBar'
 import { MeasureOverlay } from './components/MeasureOverlay'
 import { OverlaySettingsContext } from './context/overlaySettings'
-import { projectStore } from './services/ProjectStore'
 import type { ProjectData } from './services/ProjectStore'
+import type { IProjectStore } from './services/IProjectStore'
 import type { ConeData } from './canvas/ConeData'
 
-const DEFAULT_SCALE = 0.3048
-const DEFAULT_SITE_W = 1000
-const DEFAULT_SITE_H = 600
-
-// Ensure there is always a valid active project before App renders
-function ensureActiveProject(): void {
-  let id = projectStore.getActiveId()
-  if (!id || !projectStore.getById(id)) {
-    id = projectStore.create({
-      name: 'Default Project',
-      cones: [],
-      scale: DEFAULT_SCALE,
-      siteW: DEFAULT_SITE_W,
-      siteH: DEFAULT_SITE_H,
-      gridSpacing: 0,
-      showBackground: true,
-    })
-    projectStore.setActiveId(id)
-  }
+interface AppProps {
+  store: IProjectStore
+  initial: ProjectData
+  initialImage: string | null
+  projects: ProjectData[]
 }
-ensureActiveProject()
 
-export default function App() {
-  const initial = projectStore.getActiveProject()!
-
+export default function App({ store, initial, initialImage, projects: initialProjects }: AppProps) {
   const [activeProjectId, setActiveProjectId] = useState(initial.id)
   const [scale, setScale] = useState(initial.scale)
-  const [imageUrl, setImageUrl] = useState<string | null>(() => projectStore.getImage(initial.id))
+  const [imageUrl, setImageUrl] = useState<string | null>(initialImage)
   const [siteW, setSiteW] = useState(initial.siteW)
   const [siteH, setSiteH] = useState(initial.siteH)
   const [gridSpacing, setGridSpacing] = useState(initial.gridSpacing)
@@ -46,7 +29,7 @@ export default function App() {
   const [measuring, setMeasuring] = useState(false)
   const [camera, setCamera] = useState({ x: 0, y: 0, z: 1 })
   const [selectedCones, setSelectedCones] = useState<ConeData[]>([])
-  const [projectsList, setProjectsList] = useState<ProjectData[]>(() => projectStore.getAll())
+  const [projectsList, setProjectsList] = useState<ProjectData[]>(initialProjects)
 
   // Refs mirror state for use in callbacks / debounced timers
   const activeProjectIdRef = useRef(activeProjectId)
@@ -69,40 +52,23 @@ export default function App() {
   // also kept in a ref for imperative access (export/import callbacks)
   const handleRef = useRef<KonvaCanvasHandle | null>(null)
 
+  // Cones/paths from the initial project, used in handleCanvasReady
+  const initialConesRef = useRef(initial.cones)
+  const initialPathsRef = useRef(initial.paths ?? [])
+
   // Set to true only when the user explicitly uploads a new image file.
-  // The aspect-ratio auto-adjust should only fire for explicit uploads,
-  // not when imageUrl is restored from storage (initial mount or project load).
   const explicitUploadRef = useRef(false)
 
-  // Auto-save debounce timer
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Set to true when a JSON import provides page_w_pt/page_h_pt.
+  const pageDimsLockedRef = useRef(false)
 
-  function scheduleSave() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-    saveTimerRef.current = setTimeout(() => {
-      const id = activeProjectIdRef.current
-      const project = projectStore.getById(id)
-      if (!project) return
-      const api = handleRef.current?.canvasAPI
-      const cones = api ? api.getCones().filter(c => !c.isGhost) : []
-      projectStore.save(id, {
-        name: project.name,
-        cones,
-        scale: scaleRef.current,
-        siteW: siteWRef.current,
-        siteH: siteHRef.current,
-        gridSpacing: gridSpacingRef.current,
-        showBackground: showBackgroundRef.current,
-      }, imageUrlRef.current)
-    }, 500)
-  }
 
   // When a new image is uploaded, snap siteH to match the image's natural aspect ratio.
-  // Only runs for explicit user uploads (not storage restores or project loads).
   const didMountRef = useRef(false)
   useEffect(() => {
     if (!imageUrl || !explicitUploadRef.current) return
     explicitUploadRef.current = false
+    if (pageDimsLockedRef.current) return
     const img = new window.Image()
     img.onload = () => {
       setSiteW(img.naturalWidth)
@@ -111,12 +77,7 @@ export default function App() {
     img.src = imageUrl
   }, [imageUrl])
 
-  // Auto-save when any settings state changes (skip on initial mount)
-  useEffect(() => {
-    if (!didMountRef.current) { didMountRef.current = true; return }
-    scheduleSave()
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scale, imageUrl, siteW, siteH, gridSpacing, showBackground])
+  useEffect(() => { didMountRef.current = true }, [])
 
   // Canvas dimensions in canvas-space units
   const canvasW = siteW * 0.3048 / scale
@@ -136,27 +97,41 @@ export default function App() {
     handleRef.current = handle
     setCanvasHandle(handle)
 
-    // Load cones from the active project
-    const project = projectStore.getById(activeProjectIdRef.current)
-    if (project && project.cones.length > 0) {
-      handle.canvasAPI.loadCones(project.cones)
+    // Load cones and paths from the initial project data (passed via props from main.tsx)
+    if (initialConesRef.current.length > 0) {
+      handle.canvasAPI.loadCones(initialConesRef.current)
+    }
+    if (initialPathsRef.current.length > 0) {
+      handle.loadPaths(initialPathsRef.current)
     }
 
-    // Auto-save whenever cones change
-    handle.canvasAPI.onConesChange(() => scheduleSave())
   }
 
+  // ── Ctrl+S to save ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 's' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault()
+        saveCurrentProject().catch(console.error)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // ── Shared save-current-project helper ──────────────────────────────────────
-  function saveCurrentProject() {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+  async function saveCurrentProject() {
     const id = activeProjectIdRef.current
-    const project = projectStore.getById(id)
+    const project = await store.getById(id)
     if (!project) return
     const api = handleRef.current?.canvasAPI
     const cones = api ? api.getCones().filter(c => !c.isGhost) : []
-    projectStore.save(id, {
+    const paths = handleRef.current?.getPaths() ?? []
+    await store.save(id, {
       name: project.name,
       cones,
+      paths,
       scale: scaleRef.current,
       siteW: siteWRef.current,
       siteH: siteHRef.current,
@@ -166,16 +141,15 @@ export default function App() {
   }
 
   // ── Project actions ──────────────────────────────────────────────────────────
-  function handleLoadProject(id: string) {
-    saveCurrentProject()
+  async function handleLoadProject(id: string) {
 
-    const project = projectStore.getById(id)
+    const project = await store.getById(id)
     if (!project) return
 
-    projectStore.setActiveId(id)
+    await store.setActiveId(id)
     setActiveProjectId(id)
 
-    const img = projectStore.getImage(id)
+    const img = await store.getImage(id)
     setImageUrl(img)
     setScale(project.scale)
     setSiteW(project.siteW)
@@ -188,61 +162,72 @@ export default function App() {
       api.clearAllCones()
       api.loadCones(project.cones)
     }
+    handleRef.current?.clearAllPaths()
+    handleRef.current?.loadPaths(project.paths ?? [])
     handleRef.current?.resetCamera()
+
+    setProjectsList(await store.getAll())
   }
 
-  function handleNewProject(name: string, keepImage: boolean) {
-    saveCurrentProject()
+  async function handleNewProject(name: string, keepImage: boolean) {
+    await saveCurrentProject()
 
-    const newId = projectStore.create({
+    const newId = await store.create({
       name,
       cones: [],
-      scale: keepImage ? scaleRef.current : DEFAULT_SCALE,
-      siteW: keepImage ? siteWRef.current : DEFAULT_SITE_W,
-      siteH: keepImage ? siteHRef.current : DEFAULT_SITE_H,
+      scale: keepImage ? scaleRef.current : 0.3048,
+      siteW: keepImage ? siteWRef.current : 1000,
+      siteH: keepImage ? siteHRef.current : 600,
       gridSpacing: gridSpacingRef.current,
       showBackground: true,
     })
 
     if (keepImage) {
-      // Copy current background image to new project
-      projectStore.saveImage(newId, imageUrlRef.current)
+      // In localStorage mode, copy the image; in API mode saveImage is a no-op
+      await store.saveImage(newId, imageUrlRef.current)
     }
 
-    projectStore.setActiveId(newId)
+    await store.setActiveId(newId)
     setActiveProjectId(newId)
 
     if (!keepImage) {
       setImageUrl(null)
-      setScale(DEFAULT_SCALE)
-      setSiteW(DEFAULT_SITE_W)
-      setSiteH(DEFAULT_SITE_H)
+      setScale(0.3048)
+      setSiteW(1000)
+      setSiteH(600)
     }
     setShowBackground(true)
 
     const api = handleRef.current?.canvasAPI
     if (api) api.clearAllCones()
+    handleRef.current?.clearAllPaths()
     handleRef.current?.resetCamera()
 
-    setProjectsList([...projectStore.getAll()])
+    setProjectsList(await store.getAll())
   }
 
-  function handleDeleteProject(id: string) {
-    const fallbackId = projectStore.delete(id)
-    setProjectsList([...projectStore.getAll()])
+  async function handleDeleteProject(id: string) {
+    const fallbackId = await store.delete(id)
+    setProjectsList(await store.getAll())
 
     if (id === activeProjectIdRef.current) {
       if (fallbackId) {
-        handleLoadProject(fallbackId)
+        await handleLoadProject(fallbackId)
       } else {
-        handleNewProject('Default Project', false)
+        await handleNewProject('Default Project', false)
       }
     }
   }
 
-  function handleRenameProject(id: string, name: string) {
-    projectStore.rename(id, name)
-    setProjectsList([...projectStore.getAll()])
+  async function handleRenameProject(id: string, name: string) {
+    await store.rename(id, name)
+    setProjectsList(await store.getAll())
+  }
+
+  async function handleImageFile(file: File) {
+    if (store.saveImageFile) {
+      await store.saveImageFile(activeProjectIdRef.current, file)
+    }
   }
 
   // Distance badge: shown when exactly 2 cones are selected
@@ -271,6 +256,8 @@ export default function App() {
           setSiteW={setSiteW}
           setSiteH={setSiteH}
           onImageUpload={(url) => { explicitUploadRef.current = true; setImageUrl(url) }}
+          onImageFile={handleImageFile}
+          onPageDimsSet={() => { pageDimsLockedRef.current = true }}
           getCanvasAPI={() => handleRef.current?.canvasAPI ?? null}
           getStage={() => handleRef.current?.stage ?? null}
           gridSpacing={gridSpacing}
@@ -286,6 +273,7 @@ export default function App() {
           onNewProject={handleNewProject}
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
+          onSave={() => saveCurrentProject().catch(console.error)}
         />
         <div style={{ flex: 1, position: 'relative' }}>
           <KonvaCanvas

@@ -1,9 +1,12 @@
 import type { ConeData } from '../canvas/ConeData'
+import type { PathData } from '../canvas/PathData'
+import type { IProjectStore } from './IProjectStore'
 
 export interface ProjectData {
   id: string
   name: string
   cones: ConeData[]
+  paths?: PathData[]
   scale: number
   siteW: number
   siteH: number
@@ -17,7 +20,7 @@ const PROJECTS_KEY = 'ax_mapper_projects'
 const ACTIVE_KEY   = 'ax_mapper_active_project_id'
 const IMAGE_PREFIX = 'ax_mapper_image_'
 
-class ProjectStore {
+class ProjectStore implements IProjectStore {
   private projects: ProjectData[] = []
   private imageQuotaWarned = new Set<string>()
 
@@ -38,39 +41,39 @@ class ProjectStore {
     }
   }
 
-  getAll(): ProjectData[] {
-    return this.projects
+  async getAll(): Promise<ProjectData[]> {
+    return Promise.resolve(this.projects)
   }
 
-  getById(id: string): ProjectData | undefined {
-    return this.projects.find(p => p.id === id)
+  async getById(id: string): Promise<ProjectData | undefined> {
+    return Promise.resolve(this.projects.find(p => p.id === id))
   }
 
-  getActiveId(): string | null {
-    return localStorage.getItem(ACTIVE_KEY)
+  async getActiveId(): Promise<string | null> {
+    return Promise.resolve(localStorage.getItem(ACTIVE_KEY))
   }
 
-  setActiveId(id: string): void {
+  async setActiveId(id: string): Promise<void> {
     localStorage.setItem(ACTIVE_KEY, id)
   }
 
-  getActiveProject(): ProjectData | undefined {
-    const id = this.getActiveId()
+  async getActiveProject(): Promise<ProjectData | undefined> {
+    const id = await this.getActiveId()
     return id ? this.getById(id) : undefined
   }
 
-  getImage(id: string): string | null {
-    return localStorage.getItem(IMAGE_PREFIX + id)
+  async getImage(id: string): Promise<string | null> {
+    return Promise.resolve(localStorage.getItem(IMAGE_PREFIX + id))
   }
 
-  saveImage(id: string, imageUrl: string | null): void {
+  async saveImage(id: string, imageUrl: string | null): Promise<void> {
     if (!imageUrl) {
       localStorage.removeItem(IMAGE_PREFIX + id)
       return
     }
     try {
       localStorage.setItem(IMAGE_PREFIX + id, imageUrl)
-      this.imageQuotaWarned.delete(id)  // reset if it fits now (e.g. smaller image uploaded)
+      this.imageQuotaWarned.delete(id)
     } catch {
       localStorage.removeItem(IMAGE_PREFIX + id)
       if (!this.imageQuotaWarned.has(id)) {
@@ -83,7 +86,7 @@ class ProjectStore {
     }
   }
 
-  create(data: Omit<ProjectData, 'id' | 'createdAt' | 'updatedAt'>): string {
+  async create(data: Omit<ProjectData, 'id' | 'createdAt' | 'updatedAt'>): Promise<string> {
     const id = crypto.randomUUID()
     const now = Date.now()
     this.projects.push({ ...data, id, createdAt: now, updatedAt: now })
@@ -91,19 +94,19 @@ class ProjectStore {
     return id
   }
 
-  save(
+  async save(
     id: string,
     patch: Omit<ProjectData, 'id' | 'createdAt' | 'updatedAt'>,
     imageUrl: string | null,
-  ): void {
+  ): Promise<void> {
     const idx = this.projects.findIndex(p => p.id === id)
     if (idx === -1) return
     this.projects[idx] = { ...this.projects[idx], ...patch, updatedAt: Date.now() }
     this.persist()
-    this.saveImage(id, imageUrl)
+    await this.saveImage(id, imageUrl)
   }
 
-  rename(id: string, name: string): void {
+  async rename(id: string, name: string): Promise<void> {
     const p = this.projects.find(q => q.id === id)
     if (!p) return
     p.name = name
@@ -112,7 +115,7 @@ class ProjectStore {
   }
 
   /** Delete a project. Returns the id of a remaining project to activate, or null. */
-  delete(id: string): string | null {
+  async delete(id: string): Promise<string | null> {
     this.projects = this.projects.filter(p => p.id !== id)
     localStorage.removeItem(IMAGE_PREFIX + id)
     this.imageQuotaWarned.delete(id)
