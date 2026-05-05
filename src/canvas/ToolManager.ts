@@ -5,6 +5,8 @@ export interface Tool {
   onPointerMove(): void
   onPointerDown(): void
   onKeyDown(e: KeyboardEvent): void
+  onMouseDown?(): void
+  onMouseUp?(): void
 }
 
 type ToolChangeListener = (toolId: string | null) => void
@@ -39,6 +41,14 @@ export class ToolManager {
 
   handlePointerDown(): void {
     this.currentTool?.onPointerDown()
+  }
+
+  handleMouseDown(): void {
+    this.currentTool?.onMouseDown?.()
+  }
+
+  handleMouseUp(): void {
+    this.currentTool?.onMouseUp?.()
   }
 
   handleKeyDown(e: KeyboardEvent): void {

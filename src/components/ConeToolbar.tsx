@@ -79,6 +79,14 @@ function MiniSlalom({ n = 4, size = 5 }: { n?: number; size?: number }) {
   )
 }
 
+function MiniPath({ size = 14 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14">
+      <path d="M1 10 C3 4, 6 4, 7 7 S11 10, 13 4" fill="none" stroke="#ef4444" strokeWidth={1.5} strokeLinecap="round"/>
+    </svg>
+  )
+}
+
 function MiniAlign({ size = 14 }: { size?: number }) {
   const r = size * 0.14
   const y = size / 2
@@ -255,6 +263,12 @@ export function ConeToolbar({ toolManager, onSizeChange, onAlign }: Props) {
           icon={<MiniAlign />}
           label="Align (L)" active={false}
           onClick={() => onAlign?.()}
+        />
+        <ToolBtn
+          icon={<MiniPath />}
+          label="Path"
+          active={at === 'freehand-path'}
+          onClick={() => activate('freehand-path')}
         />
         <ToolBtn
           icon={<MiniCone type="standing" />}

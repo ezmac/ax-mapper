@@ -100,6 +100,36 @@
       "description": "GCP (ground control point) reference dot positions.",
       "type": "array",
       "items": { "$ref": "#/$defs/base_cone" }
+    },
+
+    "timing_start_gate": {
+      "description": "Start gate endpoints (left and right timing sensors). Optional.",
+      "type": "object",
+      "required": ["a", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "a": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Left endpoint [bx, by]." },
+        "b": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Right endpoint [bx, by]." }
+      }
+    },
+
+    "timing_end_gate": {
+      "description": "Finish gate endpoints (left and right timing sensors). Optional.",
+      "type": "object",
+      "required": ["a", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "a": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Left endpoint [bx, by]." },
+        "b": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2, "description": "Right endpoint [bx, by]." }
+      }
+    },
+
+    "stage_cone_pos": {
+      "description": "Car start position (100 GU from centroid toward start gate). Optional.",
+      "type": "array",
+      "items": { "type": "number" },
+      "minItems": 2,
+      "maxItems": 2
     }
   },
 
