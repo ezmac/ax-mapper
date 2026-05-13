@@ -120,7 +120,7 @@ export function LayoutView({ encodedData }: Props) {
   const border = '#334155'
 
   return (
-    <div style={{ background: bg, minHeight: '100vh', color: '#e2e8f0', fontFamily: 'system-ui, sans-serif', maxWidth: 480, margin: '0 auto' }}>
+    <div style={{ background: bg, minHeight: '100vh', color: '#e2e8f0', fontFamily: 'system-ui, sans-serif', maxWidth: 480, margin: '0 auto', overflowY: 'auto', height: '100vh' }}>
 
       {/* Header */}
       <div style={{ padding: '14px 16px', background: cardBg, borderBottom: `1px solid ${border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
