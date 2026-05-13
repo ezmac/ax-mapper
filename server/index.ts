@@ -208,8 +208,8 @@ app.put('/api/active', async (req, res) => {
 })
 
 fs.mkdir(DATA_DIR, { recursive: true }).then(() => {
-  app.listen(PORT, () => {
-    console.log(`AX Mapper API server running on http://localhost:${PORT}`)
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`AX Mapper API server running on http://0.0.0.0:${PORT}`)
     console.log(`Data directory: ${DATA_DIR}`)
   })
 })

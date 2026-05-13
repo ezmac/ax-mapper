@@ -200,6 +200,32 @@ export function LayoutView({ encodedData }: Props) {
               </div>
             </div>
 
+            {/* Map links */}
+            <div style={{ padding: '8px 12px', borderTop: `1px solid ${border}`, display: 'flex', gap: 8 }}>
+              <a
+                href={`https://maps.google.com/?q=${current.lat},${current.lon}&t=k`}
+                target="_blank" rel="noopener noreferrer"
+                style={{
+                  flex: 1, padding: '7px 0', textAlign: 'center', fontSize: 12, fontWeight: 600,
+                  background: '#0f172a', color: '#94a3b8', borderRadius: 6,
+                  textDecoration: 'none', border: `1px solid ${border}`,
+                }}
+              >
+                📍 This cone
+              </a>
+              <a
+                href={`https://www.google.com/maps/dir/${cones.map(c => `${c.lat},${c.lon}`).join('/')}`}
+                target="_blank" rel="noopener noreferrer"
+                style={{
+                  flex: 1, padding: '7px 0', textAlign: 'center', fontSize: 12, fontWeight: 600,
+                  background: '#0f172a', color: '#94a3b8', borderRadius: 6,
+                  textDecoration: 'none', border: `1px solid ${border}`,
+                }}
+              >
+                🗺 Full section
+              </a>
+            </div>
+
             {/* Place button */}
             <button
               onClick={markPlaced}
