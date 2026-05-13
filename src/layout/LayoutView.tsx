@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { decompressFromBase64url } from '../utils/layoutUrl'
+import { connectRaceBox } from './raceboxBle'
 import type { LayoutPayload, LayoutCone } from '../utils/layoutExport'
+import type { RaceBoxClient } from './raceboxBle'
 
 const PLACEMENT_TOLERANCE_M = 1.5
 
@@ -35,6 +37,14 @@ function coneLabel(t: LayoutCone['t']): string {
   return 'Standing'
 }
 
+interface GpsPos {
+  lat: number
+  lon: number
+  accuracy: number
+  source: 'os' | 'racebox'
+  numSV?: number
+}
+
 interface Props {
   encodedData: string
 }
@@ -44,9 +54,14 @@ export function LayoutView({ encodedData }: Props) {
   const [parseError, setParseError] = useState<string | null>(null)
   const [currentIdx, setCurrentIdx] = useState(0)
   const [placed, setPlaced] = useState<Set<number>>(new Set())
-  const [gpsPos, setGpsPos] = useState<{ lat: number; lon: number; accuracy: number } | null>(null)
+  const [gpsPos, setGpsPos] = useState<GpsPos | null>(null)
   const [gpsError, setGpsError] = useState<string | null>(null)
+  const [bleStatus, setBleStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
+  const [bleError, setBleError] = useState<string | null>(null)
   const watchIdRef = useRef<number | null>(null)
+  const bleClientRef = useRef<RaceBoxClient | null>(null)
+  // When RaceBox is active, suppress OS GPS to save battery
+  const bleActiveRef = useRef(false)
 
   useEffect(() => {
     decompressFromBase64url(encodedData)
@@ -54,6 +69,7 @@ export function LayoutView({ encodedData }: Props) {
       .catch(e => setParseError((e as Error).message))
   }, [encodedData])
 
+  // OS GPS — starts immediately; paused if RaceBox connects
   useEffect(() => {
     if (!navigator.geolocation) {
       setGpsError('Geolocation not available on this device')
@@ -61,20 +77,69 @@ export function LayoutView({ encodedData }: Props) {
     }
     watchIdRef.current = navigator.geolocation.watchPosition(
       pos => {
+        if (bleActiveRef.current) return  // RaceBox takes priority
         setGpsPos({
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
+          source: 'os',
         })
         setGpsError(null)
       },
-      err => setGpsError(err.message),
+      err => {
+        if (!bleActiveRef.current) setGpsError(err.message)
+      },
       { enableHighAccuracy: true, maximumAge: 1000 },
     )
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current)
     }
   }, [])
+
+  // Cleanup BLE on unmount
+  useEffect(() => {
+    return () => {
+      bleClientRef.current?.disconnect()
+    }
+  }, [])
+
+  async function handleConnectRaceBox() {
+    if (!navigator.bluetooth) {
+      setBleError('Web Bluetooth not available — use Chrome on Android')
+      setBleStatus('error')
+      return
+    }
+    setBleStatus('connecting')
+    setBleError(null)
+    try {
+      const client = await connectRaceBox(fix => {
+        bleActiveRef.current = true
+        setGpsPos({
+          lat: fix.lat,
+          lon: fix.lon,
+          accuracy: fix.accuracyM,
+          source: 'racebox',
+          numSV: fix.numSV,
+        })
+        setGpsError(null)
+      })
+      bleClientRef.current = client
+      setBleStatus('connected')
+    } catch (e) {
+      setBleStatus('error')
+      setBleError((e as Error).message)
+      bleActiveRef.current = false
+    }
+  }
+
+  function handleDisconnectRaceBox() {
+    bleClientRef.current?.disconnect()
+    bleClientRef.current = null
+    bleActiveRef.current = false
+    setBleStatus('idle')
+    setBleError(null)
+    setGpsPos(null)
+  }
 
   if (parseError) {
     return (
@@ -133,16 +198,48 @@ export function LayoutView({ encodedData }: Props) {
         </div>
       </div>
 
-      {/* GPS status */}
-      <div style={{ padding: '8px 16px', background: '#0f172a', borderBottom: `1px solid ${border}`, fontSize: 12 }}>
-        {gpsError ? (
-          <span style={{ color: '#f87171' }}>⚠ GPS: {gpsError}</span>
-        ) : gpsPos ? (
-          <span style={{ color: '#22c55e' }}>● GPS active · ±{Math.round(gpsPos.accuracy)}m accuracy</span>
-        ) : (
-          <span style={{ color: '#64748b' }}>Acquiring GPS…</span>
-        )}
+      {/* GPS / BLE status bar */}
+      <div style={{ padding: '8px 16px', background: '#0f172a', borderBottom: `1px solid ${border}`, fontSize: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+        <div>
+          {gpsError && bleStatus !== 'connected' ? (
+            <span style={{ color: '#f87171' }}>⚠ GPS: {gpsError}</span>
+          ) : gpsPos?.source === 'racebox' ? (
+            <span style={{ color: '#22c55e' }}>● RaceBox · ±{gpsPos.accuracy.toFixed(1)}m{gpsPos.numSV !== undefined ? ` · ${gpsPos.numSV} SVs` : ''}</span>
+          ) : gpsPos ? (
+            <span style={{ color: '#94a3b8' }}>● OS GPS · ±{Math.round(gpsPos.accuracy)}m</span>
+          ) : bleStatus === 'connecting' ? (
+            <span style={{ color: '#64748b' }}>Connecting to RaceBox…</span>
+          ) : (
+            <span style={{ color: '#64748b' }}>Acquiring GPS…</span>
+          )}
+        </div>
+        <div>
+          {bleStatus === 'connected' ? (
+            <button
+              onClick={handleDisconnectRaceBox}
+              style={{ fontSize: 11, padding: '3px 8px', background: '#1e293b', color: '#94a3b8', border: `1px solid ${border}`, borderRadius: 5, cursor: 'pointer' }}
+            >
+              Disconnect RaceBox
+            </button>
+          ) : bleStatus === 'connecting' ? (
+            <span style={{ fontSize: 11, color: '#64748b' }}>…</span>
+          ) : (
+            <button
+              onClick={handleConnectRaceBox}
+              style={{ fontSize: 11, padding: '3px 8px', background: '#1e3a5f', color: '#93c5fd', border: '1px solid #3b82f6', borderRadius: 5, cursor: 'pointer' }}
+            >
+              Connect RaceBox
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* BLE error */}
+      {bleError && (
+        <div style={{ padding: '6px 16px', background: 'rgba(248,113,113,0.1)', borderBottom: `1px solid ${border}`, fontSize: 12, color: '#f87171' }}>
+          BLE: {bleError}
+        </div>
+      )}
 
       {allDone ? (
         <div style={{ padding: 32, textAlign: 'center' }}>
