@@ -118,7 +118,8 @@ export function LayoutView({ encodedData }: Props) {
   // Compass — deviceorientationabsolute gives true-north alpha on Android Chrome
   useEffect(() => {
     function handle(e: DeviceOrientationEvent) {
-      if (e.alpha !== null) setDeviceHeading(e.alpha)
+      // alpha uses CCW-positive convention; convert to CW compass heading
+      if (e.alpha !== null) setDeviceHeading((360 - e.alpha) % 360)
     }
     // Prefer absolute (true-north); fall back to relative if not supported
     const name = ('ondeviceorientationabsolute' in window) ? 'deviceorientationabsolute' : 'deviceorientation'
