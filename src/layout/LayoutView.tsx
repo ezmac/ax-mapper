@@ -321,7 +321,7 @@ export function LayoutView({ encodedData }: Props) {
                     {/* Direction tile: compass arrow when heading available, bearing number otherwise */}
                     {toBearing !== null && (
                       <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '10px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-                        {relativeBearing !== null && !withinTolerance ? (
+                        {relativeBearing !== null ? (
                           <>
                             <DirectionArrow rotateDeg={relativeBearing} color="#f1f5f9" />
                             <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{Math.round(toBearing)}° {cardinal(toBearing)}</div>
