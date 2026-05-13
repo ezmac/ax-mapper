@@ -5,6 +5,7 @@ import type { LayoutPayload, LayoutCone } from '../utils/layoutExport'
 import type { RaceBoxClient } from './raceboxBle'
 
 const PLACEMENT_TOLERANCE_M = 1.5
+const POINTER_ALIGN_TOLERANCE_DEG = 10
 
 function haversineMeters(lat1: number, lon1: number, lat2: number, lon2: number): number {
   const R = 6371000
@@ -23,6 +24,11 @@ function bearingDeg(lat1: number, lon1: number, lat2: number, lon2: number): num
   const y = Math.sin(Δλ) * Math.cos(φ2)
   const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ)
   return ((Math.atan2(y, x) * (180 / Math.PI)) + 360) % 360
+}
+
+// Signed angular difference in [-180, 180]: how far to rotate from `from` to reach `to`
+function angleDiff(to: number, from: number): number {
+  return ((to - from + 540) % 360) - 180
 }
 
 function cardinal(deg: number): string {
@@ -49,6 +55,19 @@ interface Props {
   encodedData: string
 }
 
+// SVG arrow pointing up — rotated for direction indication
+function DirectionArrow({ rotateDeg, color }: { rotateDeg: number; color: string }) {
+  return (
+    <svg
+      viewBox="0 0 40 48"
+      width="40" height="48"
+      style={{ display: 'block', transform: `rotate(${rotateDeg}deg)` }}
+    >
+      <polygon points="20,2 38,46 20,36 2,46" fill={color} />
+    </svg>
+  )
+}
+
 export function LayoutView({ encodedData }: Props) {
   const [payload, setPayload] = useState<LayoutPayload | null>(null)
   const [parseError, setParseError] = useState<string | null>(null)
@@ -56,11 +75,11 @@ export function LayoutView({ encodedData }: Props) {
   const [placed, setPlaced] = useState<Set<number>>(new Set())
   const [gpsPos, setGpsPos] = useState<GpsPos | null>(null)
   const [gpsError, setGpsError] = useState<string | null>(null)
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
   const [bleStatus, setBleStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [bleError, setBleError] = useState<string | null>(null)
   const watchIdRef = useRef<number | null>(null)
   const bleClientRef = useRef<RaceBoxClient | null>(null)
-  // When RaceBox is active, suppress OS GPS to save battery
   const bleActiveRef = useRef(false)
 
   useEffect(() => {
@@ -77,7 +96,7 @@ export function LayoutView({ encodedData }: Props) {
     }
     watchIdRef.current = navigator.geolocation.watchPosition(
       pos => {
-        if (bleActiveRef.current) return  // RaceBox takes priority
+        if (bleActiveRef.current) return
         setGpsPos({
           lat: pos.coords.latitude,
           lon: pos.coords.longitude,
@@ -96,11 +115,20 @@ export function LayoutView({ encodedData }: Props) {
     }
   }, [])
 
+  // Compass — deviceorientationabsolute gives true-north alpha on Android Chrome
+  useEffect(() => {
+    function handle(e: DeviceOrientationEvent) {
+      if (e.alpha !== null) setDeviceHeading(e.alpha)
+    }
+    // Prefer absolute (true-north); fall back to relative if not supported
+    const name = ('ondeviceorientationabsolute' in window) ? 'deviceorientationabsolute' : 'deviceorientation'
+    window.addEventListener(name, handle as EventListener)
+    return () => window.removeEventListener(name, handle as EventListener)
+  }, [])
+
   // Cleanup BLE on unmount
   useEffect(() => {
-    return () => {
-      bleClientRef.current?.disconnect()
-    }
+    return () => { bleClientRef.current?.disconnect() }
   }, [])
 
   async function handleConnectRaceBox() {
@@ -114,13 +142,7 @@ export function LayoutView({ encodedData }: Props) {
     try {
       const client = await connectRaceBox(fix => {
         bleActiveRef.current = true
-        setGpsPos({
-          lat: fix.lat,
-          lon: fix.lon,
-          accuracy: fix.accuracyM,
-          source: 'racebox',
-          numSV: fix.numSV,
-        })
+        setGpsPos({ lat: fix.lat, lon: fix.lon, accuracy: fix.accuracyM, source: 'racebox', numSV: fix.numSV })
         setGpsError(null)
       })
       bleClientRef.current = client
@@ -171,6 +193,17 @@ export function LayoutView({ encodedData }: Props) {
     withinTolerance = distM <= PLACEMENT_TOLERANCE_M
   }
 
+  // Relative bearing: how far right/left of phone-forward the cone is
+  const relativeBearing = (toBearing !== null && deviceHeading !== null)
+    ? (toBearing - deviceHeading + 360) % 360
+    : null
+
+  // Pointer alignment: how many degrees to rotate phone to face cone direction
+  const pointerDiff = (withinTolerance && current?.t === 'P' && current.h !== undefined && deviceHeading !== null)
+    ? angleDiff(current.h, deviceHeading)
+    : null
+  const pointerAligned = pointerDiff !== null && Math.abs(pointerDiff) <= POINTER_ALIGN_TOLERANCE_DEG
+
   function markPlaced() {
     setPlaced(p => new Set([...p, currentIdx]))
     if (currentIdx < cones.length - 1) setCurrentIdx(currentIdx + 1)
@@ -204,9 +237,9 @@ export function LayoutView({ encodedData }: Props) {
           {gpsError && bleStatus !== 'connected' ? (
             <span style={{ color: '#f87171' }}>⚠ GPS: {gpsError}</span>
           ) : gpsPos?.source === 'racebox' ? (
-            <span style={{ color: '#22c55e' }}>● RaceBox · ±{gpsPos.accuracy.toFixed(1)}m{gpsPos.numSV !== undefined ? ` · ${gpsPos.numSV} SVs` : ''}</span>
+            <span style={{ color: '#22c55e' }}>● RaceBox · ±{gpsPos.accuracy.toFixed(1)}m{gpsPos.numSV !== undefined ? ` · ${gpsPos.numSV} SVs` : ''}{deviceHeading !== null ? ` · ${Math.round(deviceHeading)}°` : ''}</span>
           ) : gpsPos ? (
-            <span style={{ color: '#94a3b8' }}>● OS GPS · ±{Math.round(gpsPos.accuracy)}m</span>
+            <span style={{ color: '#94a3b8' }}>● OS GPS · ±{Math.round(gpsPos.accuracy)}m{deviceHeading !== null ? ` · ${Math.round(deviceHeading)}°` : ''}</span>
           ) : bleStatus === 'connecting' ? (
             <span style={{ color: '#64748b' }}>Connecting to RaceBox…</span>
           ) : (
@@ -272,22 +305,32 @@ export function LayoutView({ encodedData }: Props) {
                 </div>
               )}
 
-              {/* Distance / bearing */}
+              {/* Distance + direction */}
               <div style={{ marginTop: 12, display: 'flex', gap: 12 }}>
                 {distM !== null ? (
                   <>
+                    {/* Distance tile */}
                     <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
                       <div style={{ fontSize: 24, fontWeight: 700, color: withinTolerance ? '#22c55e' : '#f1f5f9' }}>
                         {distM < 100 ? distM.toFixed(1) : Math.round(distM)}m
                       </div>
                       <div style={{ fontSize: 11, color: '#64748b' }}>distance</div>
                     </div>
+
+                    {/* Direction tile: compass arrow when heading available, bearing number otherwise */}
                     {toBearing !== null && (
-                      <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '10px 12px', textAlign: 'center' }}>
-                        <div style={{ fontSize: 24, fontWeight: 700 }}>
-                          {Math.round(toBearing)}°
-                        </div>
-                        <div style={{ fontSize: 11, color: '#64748b' }}>{cardinal(toBearing)}</div>
+                      <div style={{ flex: 1, background: '#0f172a', borderRadius: 8, padding: '10px 12px', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        {relativeBearing !== null && !withinTolerance ? (
+                          <>
+                            <DirectionArrow rotateDeg={relativeBearing} color="#f1f5f9" />
+                            <div style={{ fontSize: 11, color: '#64748b', marginTop: 4 }}>{Math.round(toBearing)}° {cardinal(toBearing)}</div>
+                          </>
+                        ) : (
+                          <>
+                            <div style={{ fontSize: 24, fontWeight: 700 }}>{Math.round(toBearing)}°</div>
+                            <div style={{ fontSize: 11, color: '#64748b' }}>{cardinal(toBearing)}</div>
+                          </>
+                        )}
                       </div>
                     )}
                   </>
@@ -295,6 +338,37 @@ export function LayoutView({ encodedData }: Props) {
                   <div style={{ color: '#475569', fontSize: 13 }}>Waiting for GPS fix…</div>
                 )}
               </div>
+
+              {/* Pointer alignment — shown when at position with compass */}
+              {withinTolerance && current.t === 'P' && current.h !== undefined && pointerDiff !== null && (
+                <div style={{
+                  marginTop: 10, padding: '10px 14px', borderRadius: 8,
+                  background: pointerAligned ? 'rgba(34,197,94,0.12)' : '#0f172a',
+                  border: `1px solid ${pointerAligned ? '#22c55e' : border}`,
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  transition: 'background 0.3s, border-color 0.3s',
+                }}>
+                  {/* Mini arrow showing cone target direction relative to phone */}
+                  <div style={{ flexShrink: 0 }}>
+                    <DirectionArrow
+                      rotateDeg={(angleDiff(current.h, deviceHeading!) + 360) % 360}
+                      color={pointerAligned ? '#22c55e' : '#f59e0b'}
+                    />
+                  </div>
+                  <div>
+                    {pointerAligned ? (
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#22c55e' }}>Cone aligned</div>
+                    ) : (
+                      <div style={{ fontWeight: 700, fontSize: 14, color: '#f59e0b' }}>
+                        Rotate {pointerDiff > 0 ? 'right' : 'left'} {Math.abs(Math.round(pointerDiff))}°
+                      </div>
+                    )}
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>
+                      Facing {Math.round(deviceHeading!)}° · Cone → {current.h}°
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Map links */}
