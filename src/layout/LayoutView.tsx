@@ -76,6 +76,8 @@ export function LayoutView({ encodedData }: Props) {
   const [gpsPos, setGpsPos] = useState<GpsPos | null>(null)
   const [gpsError, setGpsError] = useState<string | null>(null)
   const [deviceHeading, setDeviceHeading] = useState<number | null>(null)
+  const [showGpsReadout, setShowGpsReadout] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [bleStatus, setBleStatus] = useState<'idle' | 'connecting' | 'connected' | 'error'>('idle')
   const [bleError, setBleError] = useState<string | null>(null)
   const watchIdRef = useRef<number | null>(null)
@@ -162,6 +164,15 @@ export function LayoutView({ encodedData }: Props) {
     setBleStatus('idle')
     setBleError(null)
     setGpsPos(null)
+  }
+
+  function handleCopy() {
+    if (!gpsPos) return
+    const text = `${gpsPos.lat}, ${gpsPos.lon}`
+    navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
   }
 
   if (parseError) {
@@ -274,6 +285,32 @@ export function LayoutView({ encodedData }: Props) {
           BLE: {bleError}
         </div>
       )}
+
+      {/* GPS readout for manual GCP recording */}
+      <div style={{ padding: '6px 16px', borderBottom: `1px solid ${border}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button
+          onClick={() => setShowGpsReadout(v => !v)}
+          style={{ fontSize: 12, padding: '4px 10px', background: '#1e293b', color: '#94a3b8', border: `1px solid ${border}`, borderRadius: 5, cursor: 'pointer' }}
+        >
+          {showGpsReadout ? 'Hide GPS' : 'Show GPS'}
+        </button>
+        {showGpsReadout && gpsPos && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 12, color: '#e2e8f0', fontVariantNumeric: 'tabular-nums' }}>
+              {gpsPos.lat.toFixed(8)}, {gpsPos.lon.toFixed(8)}
+            </span>
+            <button
+              onClick={handleCopy}
+              style={{ fontSize: 11, padding: '3px 8px', background: copied ? '#166534' : '#1e293b', color: copied ? '#22c55e' : '#94a3b8', border: `1px solid ${copied ? '#22c55e' : border}`, borderRadius: 5, cursor: 'pointer', transition: 'all 0.2s' }}
+            >
+              {copied ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        )}
+        {showGpsReadout && !gpsPos && (
+          <span style={{ fontSize: 12, color: '#64748b' }}>No GPS fix</span>
+        )}
+      </div>
 
       {allDone ? (
         <div style={{ padding: 32, textAlign: 'center' }}>
