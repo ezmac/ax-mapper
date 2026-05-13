@@ -9,5 +9,7 @@ export interface ConeData {
   w: number
   h: number
   isGhost: boolean
-  noExport?: boolean  // placed on canvas but omitted from JSON export
+  noExport?: boolean   // placed on canvas but omitted from JSON export
+  gcpCoords?: { lat: number; lon: number }  // GPS anchor for GCP cones
+  section?: number     // 1–5, layout export grouping
 }

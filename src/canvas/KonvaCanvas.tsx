@@ -122,8 +122,9 @@ export function KonvaCanvas({
     // ── Data layer ───────────────────────────────────────────────────────────
     const store   = new CanvasStore()
     const history = new HistoryStack()
-    const coneNodes    = new Map<string, Konva.Group>()
-    const coneNodeDims = new Map<string, { w: number; h: number }>()
+    const coneNodes   = new Map<string, Konva.Group>()
+    const coneNodeKey = new Map<string, string>()  // id → 'w,h,section'
+    function nodeKey(c: ConeData) { return `${c.w},${c.h},${c.section ?? ''}` }
 
     // ── Selection state ──────────────────────────────────────────────────────
     const selectedIds        = new Set<string>()
@@ -253,7 +254,7 @@ export function KonvaCanvas({
           selectedIds.delete(nid)
           node.destroy()
           coneNodes.delete(nid)
-          coneNodeDims.delete(nid)
+          coneNodeKey.delete(nid)
         }
       }
 
@@ -262,20 +263,17 @@ export function KonvaCanvas({
         if (!node) {
           node = createConeNode(cone)
           coneNodes.set(cone.id, node)
-          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
+          coneNodeKey.set(cone.id, nodeKey(cone))
           conesLayer.add(node)
           attachNodeHandlers(cone.id, node)
           applyMode(node, inSelectMode)
-        } else if (
-          coneNodeDims.get(cone.id)?.w !== cone.w ||
-          coneNodeDims.get(cone.id)?.h !== cone.h
-        ) {
-          // Dimensions changed — rebuild the node's visual children in place
+        } else if (coneNodeKey.get(cone.id) !== nodeKey(cone)) {
+          // Dimensions or section changed — rebuild the node's visual children in place
           const isSelected = selectedIds.has(cone.id)
           node.destroy()
           node = createConeNode(cone)
           coneNodes.set(cone.id, node)
-          coneNodeDims.set(cone.id, { w: cone.w, h: cone.h })
+          coneNodeKey.set(cone.id, nodeKey(cone))
           conesLayer.add(node)
           attachNodeHandlers(cone.id, node)
           applyMode(node, inSelectMode)

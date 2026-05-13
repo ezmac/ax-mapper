@@ -6,6 +6,9 @@ import { GridOverlay } from './components/GridOverlay'
 import { HelpOverlay } from './components/HelpOverlay'
 import { TopBar } from './components/TopBar'
 import { MeasureOverlay } from './components/MeasureOverlay'
+import { GcpPanel } from './components/GcpPanel'
+import { SectionPanel } from './components/SectionPanel'
+import { LayoutExportModal } from './components/LayoutExportModal'
 import { OverlaySettingsContext } from './context/overlaySettings'
 import type { ProjectData } from './services/ProjectStore'
 import type { IProjectStore } from './services/IProjectStore'
@@ -30,6 +33,7 @@ export default function App({ store, initial, initialImage, projects: initialPro
   const [camera, setCamera] = useState({ x: 0, y: 0, z: 1 })
   const [selectedCones, setSelectedCones] = useState<ConeData[]>([])
   const [projectsList, setProjectsList] = useState<ProjectData[]>(initialProjects)
+  const [showLayoutExport, setShowLayoutExport] = useState(false)
 
   // Refs mirror state for use in callbacks / debounced timers
   const activeProjectIdRef = useRef(activeProjectId)
@@ -274,6 +278,7 @@ export default function App({ store, initial, initialImage, projects: initialPro
           onDeleteProject={handleDeleteProject}
           onRenameProject={handleRenameProject}
           onSave={() => saveCurrentProject().catch(console.error)}
+          onLayoutExport={() => setShowLayoutExport(true)}
         />
         <div style={{ flex: 1, position: 'relative' }}>
           <KonvaCanvas
@@ -307,6 +312,14 @@ export default function App({ store, initial, initialImage, projects: initialPro
                 {distanceFt.toFixed(1)} FT
               </div>
             )}
+            {/* GCP coordinate editor — shown when exactly one GCP is selected */}
+            {selectedCones.length === 1 && selectedCones[0].coneType === 'gcp' && canvasHandle && (
+              <GcpPanel cone={selectedCones[0]} canvasAPI={canvasHandle.canvasAPI} />
+            )}
+            {/* Section assignment — shown when any placeable cones are selected */}
+            {selectedCones.some(c => c.coneType !== 'gcp' && c.coneType !== 'car_start') && canvasHandle && (
+              <SectionPanel selectedCones={selectedCones} canvasAPI={canvasHandle.canvasAPI} />
+            )}
           </div>
           <MeasureOverlay
             active={measuring}
@@ -316,6 +329,13 @@ export default function App({ store, initial, initialImage, projects: initialPro
           />
         </div>
       </div>
+      {showLayoutExport && canvasHandle && (
+        <LayoutExportModal
+          cones={canvasHandle.canvasAPI.getCones()}
+          projectName={projectsList.find(p => p.id === activeProjectId)?.name ?? 'course'}
+          onClose={() => setShowLayoutExport(false)}
+        />
+      )}
     </OverlaySettingsContext.Provider>
   )
 }

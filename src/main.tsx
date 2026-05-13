@@ -2,6 +2,7 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { LayoutView } from './layout/LayoutView.tsx'
 import { projectStore } from './services/ProjectStore.ts'
 import { apiProjectStore } from './services/ApiProjectStore.ts'
 import type { IProjectStore } from './services/IProjectStore.ts'
@@ -12,6 +13,18 @@ const DEFAULT_SITE_W = 1000
 const DEFAULT_SITE_H = 600
 
 async function main() {
+  // Layout view: decode ?d= param and render read-only placement UI
+  const params = new URLSearchParams(window.location.search)
+  const layoutData = params.get('d')
+  if (layoutData) {
+    createRoot(document.getElementById('root')!).render(
+      <StrictMode>
+        <LayoutView encodedData={layoutData} />
+      </StrictMode>,
+    )
+    return
+  }
+
   const store: IProjectStore = import.meta.env.VITE_API_MODE === 'true'
     ? apiProjectStore
     : projectStore

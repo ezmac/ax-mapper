@@ -6,6 +6,8 @@ interface ConeEntry {
   type: ConeType
   size: number
   facing_deg?: number
+  lat?: number
+  lon?: number
 }
 
 interface ExportData {
@@ -69,6 +71,10 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
       } else if (cone.coneType === 'timing_end') {
         timing_end.push(entry)
       } else if (cone.coneType === 'gcp') {
+        if (cone.gcpCoords) {
+          entry.lat = cone.gcpCoords.lat
+          entry.lon = cone.gcpCoords.lon
+        }
         gcp.push(entry)
       }
     }

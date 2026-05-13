@@ -36,6 +36,7 @@ interface TopBarProps {
   onDeleteProject: (id: string) => void
   onRenameProject: (id: string, name: string) => void
   onSave: () => void
+  onLayoutExport: () => void
 }
 
 const inputStyle: React.CSSProperties = {
@@ -105,7 +106,7 @@ function ToggleBtn({ label, active, onClick }: {
   )
 }
 
-function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scale, setSiteW, setSiteH, onPageDimsSet, projectName }: {
+function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scale, setSiteW, setSiteH, onPageDimsSet, projectName, onLayoutExport }: {
   getCanvasAPI: () => CanvasAPI | null
   getStage: () => Konva.Stage | null
   imageUrl: string | null
@@ -116,6 +117,7 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
   setSiteH: (h: number) => void
   onPageDimsSet?: () => void
   projectName: string
+  onLayoutExport: () => void
 }) {
   const filename = projectName.replace(/\s+/g, '_')
   const [open, setOpen] = useState(false)
@@ -229,6 +231,10 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
           <button onClick={handleDownloadJSON} style={itemStyle}>
             ⬇ Download JSON
           </button>
+          <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '4px 0' }} />
+          <button onClick={() => { setOpen(false); onLayoutExport() }} style={itemStyle}>
+            📍 Layout Export…
+          </button>
         </div>
       )}
     </div>
@@ -244,7 +250,7 @@ export function TopBar({
   onMeasureScale, isMeasuring,
   imageUrl,
   activeProjectId, projects, onLoadProject, onNewProject, onDeleteProject, onRenameProject,
-  onSave,
+  onSave, onLayoutExport,
 }: TopBarProps) {
   const activeProjectName = projects.find(p => p.id === activeProjectId)?.name ?? 'ax_course'
 
@@ -354,6 +360,7 @@ export function TopBar({
         setSiteH={setSiteH}
         onPageDimsSet={onPageDimsSet}
         projectName={activeProjectName}
+        onLayoutExport={onLayoutExport}
       />
     </div>
   )
