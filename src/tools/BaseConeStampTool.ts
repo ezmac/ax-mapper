@@ -11,6 +11,7 @@ export interface LayoutEntry {
   ox: number          // offset from stamp origin (canvas units)
   oy: number
   rotOffset?: number  // extra rotation added to ghostRotation for this shape
+  noExport?: boolean  // placed visually but omitted from JSON export
 }
 
 function rotate(x: number, y: number, rad: number): [number, number] {
@@ -23,7 +24,7 @@ export class BaseConeStampTool {
   readonly id: string = ''
 
   protected ghostRotation = 0
-  protected gateHalf = 20
+  protected gateHalf = 12.5
 
   private currentGhosts: Omit<ConeData, 'id' | 'isGhost'>[] = []
 
@@ -38,11 +39,10 @@ export class BaseConeStampTool {
   }
 
   protected widthStep(): number { return 0 }
-
-  private get sz() { return coneSettings.size }
+  protected coneSize(): number { return coneSettings.size }
 
   private dims(coneType: ConeType): { w: number; h: number } {
-    const s = this.sz
+    const s = this.coneSize()
     return coneType === 'pointer'
       ? { w: Math.round(s * 1.6), h: s }
       : { w: s, h: s }
@@ -51,34 +51,15 @@ export class BaseConeStampTool {
   private shapePos(
     cursorX: number, cursorY: number,
     ox: number, oy: number,
-    coneType: ConeType,
-    rotOffset = 0,
   ) {
-    const { w, h } = this.dims(coneType)
-    const totalRot = this.ghostRotation + rotOffset
-    const cos = Math.cos(totalRot)
-    const sin = Math.sin(totalRot)
-
-    // Pin the centre of the shape's bounding box to (cursorX + orbX, cursorY + orbY).
-    // Shape origin x,y is the top-left corner; rotation is around that origin.
-    //   cx_in_local = w/2, cy_in_local = h/2
-    //   page centre = (cos·cx - sin·cy + x, sin·cx + cos·cy + y)
-    //   → x = cursorX + orbX - (cos·ax - sin·ay)
-
-    const ax = w / 2
-    const ay = h / 2
     const [orbX, orbY] = rotate(ox, oy, this.ghostRotation)
-
-    return {
-      x: cursorX + orbX - (cos * ax - sin * ay),
-      y: cursorY + orbY - (sin * ax + cos * ay),
-    }
+    return { x: cursorX + orbX, y: cursorY + orbY }
   }
 
   private computeGhosts(pageX: number, pageY: number): Omit<ConeData, 'id' | 'isGhost'>[] {
     return this.layout().map(entry => {
       const rotOffset = entry.rotOffset ?? 0
-      const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy, entry.coneType, rotOffset)
+      const pos = this.shapePos(pageX, pageY, entry.ox, entry.oy)
       const { w, h } = this.dims(entry.coneType)
       return {
         coneType: entry.coneType,
@@ -87,6 +68,7 @@ export class BaseConeStampTool {
         rotation: this.ghostRotation + rotOffset,
         w,
         h,
+        ...(entry.noExport ? { noExport: true } : {}),
       }
     })
   }
@@ -134,7 +116,7 @@ export class BaseConeStampTool {
       if (ws === 0) return
       const step = e.shiftKey ? Math.max(1, Math.round(ws / 4)) : ws
       this.gateHalf += e.key === 'ArrowUp' ? step : -step
-      this.gateHalf = Math.max(this.gateHalf, Math.ceil(this.sz / 2))
+      this.gateHalf = Math.max(this.gateHalf, Math.ceil(this.coneSize() / 2))
       this.refresh(x, y)
     }
   }

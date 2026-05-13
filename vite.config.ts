@@ -8,4 +8,13 @@ export default defineConfig({
   build: {
     chunkSizeWarningLimit: 2000,
   },
+  server: process.env.VITE_API_MODE ? {
+    host: '0.0.0.0',
+    proxy: {
+      '/api': {
+        target: `http://localhost:${process.env.SERVER_PORT ?? '3001'}`,
+        changeOrigin: true,
+      },
+    },
+  } : undefined,
 })

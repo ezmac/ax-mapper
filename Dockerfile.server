@@ -1,0 +1,12 @@
+FROM node:20-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+COPY src/services/ProjectStore.ts src/services/ProjectStore.ts
+COPY src/services/IProjectStore.ts src/services/IProjectStore.ts
+COPY src/canvas/ConeData.ts src/canvas/ConeData.ts
+COPY src/canvas/PathData.ts src/canvas/PathData.ts
+COPY server/ server/
+ENV DATA_DIR=/app/data
+ENV SERVER_PORT=3001
+CMD ["npx", "tsx", "server/index.ts"]

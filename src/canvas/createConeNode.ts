@@ -8,6 +8,8 @@ const C_RED     = '#ef4444'
 const C_BLUE    = '#3b82f6'
 const C_YELLOW  = '#F59E0B'
 
+const SECTION_COLORS = ['', '#3b82f6', '#22c55e', '#f97316', '#a855f7', '#ec4899']
+
 /** Build a Konva.Group representing a single cone. */
 export function createConeNode(data: ConeData): Konva.Group {
   const { x, y, w, h, rotation, isGhost, coneType } = data
@@ -17,6 +19,8 @@ export function createConeNode(data: ConeData): Konva.Group {
     id: data.id,
     x,
     y,
+    offsetX: w / 2,
+    offsetY: h / 2,
     rotation: rotation * (180 / Math.PI), // Konva uses degrees
     opacity,
     // listening defaults to true; KonvaCanvas sets it based on tool mode
@@ -65,6 +69,20 @@ export function createConeNode(data: ConeData): Konva.Group {
         strokeEnabled: false,
       }))
       break
+  }
+
+  if (data.section !== undefined && !isGhost) {
+    const color = SECTION_COLORS[data.section]
+    const dotR = Math.min(w, h) * 0.22
+    group.add(new Konva.Circle({
+      x: w - dotR * 0.7,
+      y: dotR * 0.7,
+      radius: dotR,
+      fill: color,
+      stroke: 'white',
+      strokeWidth: 1,
+      listening: false,
+    }))
   }
 
   return group

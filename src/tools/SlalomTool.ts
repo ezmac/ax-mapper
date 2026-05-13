@@ -9,7 +9,7 @@ export class SlalomTool extends BaseConeStampTool {
   static coneCount = SLALOM_COUNT_DEFAULT
 
   // gateHalf repurposed as cone-to-cone spacing along the slalom axis
-  protected override gateHalf = 25
+  protected override gateHalf = 50
 
   constructor(api: CanvasAPI) { super(api) }
 

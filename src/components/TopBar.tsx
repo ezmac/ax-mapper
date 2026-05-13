@@ -3,6 +3,7 @@ import type { CanvasAPI } from '../canvas/CanvasAPI'
 import type Konva from 'konva'
 import { exportJSON } from '../utils/exportJSON'
 import { importJSON } from '../utils/importJSON'
+import type { ImportResult } from '../utils/importJSON'
 import { exportPng } from '../utils/exportPng'
 import { coneSettings } from '../settings'
 import { ProjectMenu } from './ProjectMenu'
@@ -16,6 +17,8 @@ interface TopBarProps {
   setSiteW: (w: number) => void
   setSiteH: (h: number) => void
   onImageUpload: (dataUrl: string) => void
+  onImageFile?: (file: File) => void
+  onPageDimsSet?: () => void
   getCanvasAPI: () => CanvasAPI | null
   getStage: () => Konva.Stage | null
   gridSpacing: number
@@ -32,6 +35,8 @@ interface TopBarProps {
   onNewProject: (name: string, keepImage: boolean) => void
   onDeleteProject: (id: string) => void
   onRenameProject: (id: string, name: string) => void
+  onSave: () => void
+  onLayoutExport: () => void
 }
 
 const inputStyle: React.CSSProperties = {
@@ -101,7 +106,7 @@ function ToggleBtn({ label, active, onClick }: {
   )
 }
 
-function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scale, setSiteW, setSiteH, projectName }: {
+function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scale, setSiteW, setSiteH, onPageDimsSet, projectName, onLayoutExport }: {
   getCanvasAPI: () => CanvasAPI | null
   getStage: () => Konva.Stage | null
   imageUrl: string | null
@@ -110,7 +115,9 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
   scale: number
   setSiteW: (w: number) => void
   setSiteH: (h: number) => void
+  onPageDimsSet?: () => void
   projectName: string
+  onLayoutExport: () => void
 }) {
   const filename = projectName.replace(/\s+/g, '_')
   const [open, setOpen] = useState(false)
@@ -135,16 +142,13 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
       if (!canvasAPI) return
       try {
         const data = JSON.parse(ev.target?.result as string)
-        importJSON(canvasAPI, data, coneSettings.size)
-        // If a background image is loaded and the JSON has a scale transform,
-        // resize the canvas so 1 canvas unit = 1 image pixel, preserving scale.
-        if (imageUrl && data.transform?.type === 'scale') {
-          const img = new window.Image()
-          img.onload = () => {
-            setSiteW(Math.round(img.naturalWidth  * scale / 0.3048))
-            setSiteH(Math.round(img.naturalHeight * scale / 0.3048))
-          }
-          img.src = imageUrl
+        const result: ImportResult = importJSON(canvasAPI, data, coneSettings.size)
+        // Use page dimensions from the JSON transform to size the canvas so cones
+        // align with the preview image (which is rendered at a different DPI).
+        if (result.pageW != null && result.pageH != null) {
+          setSiteW(Math.round(result.pageW))
+          setSiteH(Math.round(result.pageH))
+          onPageDimsSet?.()
         }
       } catch (err) {
         alert(`Import failed: ${(err as Error).message}`)
@@ -227,6 +231,10 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
           <button onClick={handleDownloadJSON} style={itemStyle}>
             ⬇ Download JSON
           </button>
+          <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '4px 0' }} />
+          <button onClick={() => { setOpen(false); onLayoutExport() }} style={itemStyle}>
+            📍 Layout Export…
+          </button>
         </div>
       )}
     </div>
@@ -236,18 +244,20 @@ function ImportExportMenu({ getCanvasAPI, getStage, imageUrl, siteW, siteH, scal
 export function TopBar({
   scale, setScale,
   siteW, siteH, setSiteW, setSiteH,
-  onImageUpload, getCanvasAPI, getStage,
+  onImageUpload, onImageFile, onPageDimsSet, getCanvasAPI, getStage,
   gridSpacing, setGridSpacing,
   showBackground, setShowBackground,
   onMeasureScale, isMeasuring,
   imageUrl,
   activeProjectId, projects, onLoadProject, onNewProject, onDeleteProject, onRenameProject,
+  onSave, onLayoutExport,
 }: TopBarProps) {
   const activeProjectName = projects.find(p => p.id === activeProjectId)?.name ?? 'ax_course'
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
+    onImageFile?.(file)
     const reader = new FileReader()
     reader.onload = (ev) => onImageUpload(ev.target?.result as string)
     reader.readAsDataURL(file)
@@ -335,6 +345,10 @@ export function TopBar({
 
       <div style={{ flex: 1 }} />
 
+      <button onClick={onSave} style={btnBase} title="Save (Ctrl+S)">
+        💾 Save
+      </button>
+
       <ImportExportMenu
         getCanvasAPI={getCanvasAPI}
         getStage={getStage}
@@ -344,7 +358,9 @@ export function TopBar({
         scale={scale}
         setSiteW={setSiteW}
         setSiteH={setSiteH}
+        onPageDimsSet={onPageDimsSet}
         projectName={activeProjectName}
+        onLayoutExport={onLayoutExport}
       />
     </div>
   )

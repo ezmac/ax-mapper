@@ -14,6 +14,8 @@ interface ScaleTransform {
   scale: number
   ox: number
   oy: number
+  page_w_pt?: number
+  page_h_pt?: number
 }
 
 interface ImportData {
@@ -23,6 +25,7 @@ interface ImportData {
   timing_start?: ConeEntry[]
   timing_end?: ConeEntry[]
   gcp?: ConeEntry[]
+  stage_cone_pos?: [number, number]
   // legacy field names from pre-alignment ax-mapper exports
   greens?: ConeEntry[]
   reds?: ConeEntry[]
@@ -35,7 +38,12 @@ function dims(coneType: ConeType, s: number): { w: number; h: number } {
     : { w: s, h: s }
 }
 
-export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: number): void {
+export interface ImportResult {
+  pageW?: number  // canvas units wide (= page_w_pt when scale=0.3048)
+  pageH?: number
+}
+
+export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: number): ImportResult {
   const t = data.transform
   if (t.type !== 'scale') {
     throw new Error(`Unsupported transform type: ${(t as any).type}`)
@@ -45,6 +53,11 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
   const ox = t.ox ?? 0
   const oy = t.oy ?? 0
 
+  // page_w_pt/page_h_pt are in PDF points; canvas units = pt * scale / 0.3048
+  // (when scale=0.3048 this simplifies to page_w_pt canvas units = page_w_pt PDF points)
+  const pageW = t.page_w_pt != null ? t.page_w_pt * scale / 0.3048 : undefined
+  const pageH = t.page_h_pt != null ? t.page_h_pt * scale / 0.3048 : undefined
+
   // Inverse of export:
   //   bx = cx * scale  →  cx = bx / scale  (when ox=oy=0)
   //   by = -cy * scale →  cy = -by / scale
@@ -52,18 +65,6 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
     return {
       cx: (bx - ox) / scale,
       cy: -(by - oy) / scale,
-    }
-  }
-
-  // Shape origin from page-space centre + rotation:
-  //   cx = cos(θ)·w/2 − sin(θ)·h/2 + x  →  x = cx − (cos·w/2 − sin·h/2)
-  //   cy = sin(θ)·w/2 + cos(θ)·h/2 + y  →  y = cy − (sin·w/2 + cos·h/2)
-  function shapeOrigin(cx: number, cy: number, θ: number, w: number, h: number) {
-    const cos = Math.cos(θ)
-    const sin = Math.sin(θ)
-    return {
-      x: cx - (cos * w / 2 - sin * h / 2),
-      y: cy - (sin * w / 2 + cos * h / 2),
     }
   }
 
@@ -76,7 +77,7 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
 
   canvasAPI.run(() => {
     for (const { entry, coneType } of allEntries) {
-      const { cx, cy } = toPageCentre(entry.bx, entry.by)
+      const { cx: x, cy: y } = toPageCentre(entry.bx, entry.by)
       const { w, h } = dims(coneType, entry.size ?? coneSize)
 
       // facing_deg (CCW from +X, Blender) → canvas θ (CW from +X, Y-down)
@@ -84,9 +85,17 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
         ? -(entry.facing_deg * Math.PI / 180)
         : 0
 
-      const { x, y } = shapeOrigin(cx, cy, θ, w, h)
-
       canvasAPI.createCone({ coneType, x, y, rotation: θ, w, h })
     }
+
+    // Import car start position (stage_cone_pos)
+    if (data.stage_cone_pos) {
+      const [bx, by] = data.stage_cone_pos
+      const { cx: x, cy: y } = toPageCentre(bx, by)
+      const { w, h } = dims('car_start', coneSize)
+      canvasAPI.createCone({ coneType: 'car_start', x, y, rotation: 0, w, h })
+    }
   })
+
+  return { pageW, pageH }
 }
