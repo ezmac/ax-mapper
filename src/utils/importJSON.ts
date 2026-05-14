@@ -25,7 +25,7 @@ interface ImportData {
   timing_start?: ConeEntry[]
   timing_end?: ConeEntry[]
   gcp?: ConeEntry[]
-  stage_cone_pos?: [number, number]
+  stage_cone_pos?: { bx: number; by: number; facing_deg?: number } | [number, number]
   // legacy field names from pre-alignment ax-mapper exports
   greens?: ConeEntry[]
   reds?: ConeEntry[]
@@ -90,10 +90,14 @@ export function importJSON(canvasAPI: CanvasAPI, data: ImportData, coneSize: num
 
     // Import car start position (stage_cone_pos)
     if (data.stage_cone_pos) {
-      const [bx, by] = data.stage_cone_pos
+      const raw = data.stage_cone_pos
+      const bx = Array.isArray(raw) ? raw[0] : raw.bx
+      const by = Array.isArray(raw) ? raw[1] : raw.by
+      const facing_deg = Array.isArray(raw) ? undefined : raw.facing_deg
       const { cx: x, cy: y } = toPageCentre(bx, by)
       const { w, h } = dims('car_start', coneSize)
-      canvasAPI.createCone({ coneType: 'car_start', x, y, rotation: 0, w, h })
+      const θ = facing_deg != null ? -(facing_deg * Math.PI / 180) : 0
+      canvasAPI.createCone({ coneType: 'car_start', x, y, rotation: θ, w, h })
     }
   })
 

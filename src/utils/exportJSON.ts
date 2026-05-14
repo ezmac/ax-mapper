@@ -29,7 +29,7 @@ interface ExportData {
   timing_start: ConeEntry[]
   timing_end: ConeEntry[]
   gcp: ConeEntry[]
-  stage_cone_pos?: [number, number]
+  stage_cone_pos?: { bx: number; by: number; facing_deg: number }
 }
 
 export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): ExportData {
@@ -40,7 +40,7 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
   const timing_start: ConeEntry[] = []
   const timing_end: ConeEntry[] = []
   const gcp: ConeEntry[] = []
-  let stageConePosExport: [number, number] | undefined
+  let stageConePosExport: { bx: number; by: number; facing_deg: number } | undefined
 
   let xmin = Infinity, xmax = -Infinity, ymin = Infinity, ymax = -Infinity
 
@@ -55,7 +55,8 @@ export function exportJSON(cones: ConeData[], scaleMetresPerUnit: number): Expor
     ymin = Math.min(ymin, by); ymax = Math.max(ymax, by)
 
     if (cone.coneType === 'car_start') {
-      stageConePosExport = [bx, by]
+      const facing_deg = Math.round(((-θ * 180 / Math.PI) + 360) % 360 * 100) / 100
+      stageConePosExport = { bx, by, facing_deg }
     } else {
       const entry: ConeEntry = { bx, by, type: cone.coneType, size: cone.h }
 
