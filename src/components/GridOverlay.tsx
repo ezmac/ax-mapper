@@ -1,7 +1,7 @@
 import { useOverlaySettings } from '../context/overlaySettings'
 
 export function GridOverlay() {
-  const { gridSpacing, scale, camera } = useOverlaySettings()
+  const { gridSpacing, gridOffsetX, gridOffsetY, scale, camera } = useOverlaySettings()
 
   if (!gridSpacing) return null
 
@@ -11,10 +11,14 @@ export function GridOverlay() {
   const gridUnits = gridSpacing * 0.3048 / scale
   const gridPx = gridUnits * z
 
+  // Offset in screen pixels
+  const offsetPxX = (gridOffsetX * 0.3048 / scale) * z
+  const offsetPxY = (gridOffsetY * 0.3048 / scale) * z
+
   // Stage transform: screenX = pageX * z + x
   // Phase: (x mod gridPx + gridPx) mod gridPx gives where the page-origin grid line falls
-  const ox = ((x % gridPx) + gridPx) % gridPx
-  const oy = ((y % gridPx) + gridPx) % gridPx
+  const ox = (((x + offsetPxX) % gridPx) + gridPx) % gridPx
+  const oy = (((y + offsetPxY) % gridPx) + gridPx) % gridPx
 
   return (
     <div

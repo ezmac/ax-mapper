@@ -28,6 +28,8 @@ export default function App({ store, initial, initialImage, projects: initialPro
   const [siteW, setSiteW] = useState(initial.siteW)
   const [siteH, setSiteH] = useState(initial.siteH)
   const [gridSpacing, setGridSpacing] = useState(initial.gridSpacing)
+  const [gridOffsetX, setGridOffsetX] = useState(0)
+  const [gridOffsetY, setGridOffsetY] = useState(0)
   const [showBackground, setShowBackground] = useState(initial.showBackground)
   const [measuring, setMeasuring] = useState(false)
   const [camera, setCamera] = useState({ x: 0, y: 0, z: 1 })
@@ -249,7 +251,7 @@ export default function App({ store, initial, initialImage, projects: initialPro
 
   return (
     <OverlaySettingsContext.Provider value={{
-      gridSpacing, imageUrl, siteW, siteH, scale, showBackground, camera,
+      gridSpacing, gridOffsetX, gridOffsetY, imageUrl, siteW, siteH, scale, showBackground, camera,
     }}>
       <div style={{ display: 'flex', flexDirection: 'column', width: '100vw', height: '100vh' }}>
         <TopBar
@@ -266,6 +268,10 @@ export default function App({ store, initial, initialImage, projects: initialPro
           getStage={() => handleRef.current?.stage ?? null}
           gridSpacing={gridSpacing}
           setGridSpacing={setGridSpacing}
+          gridOffsetX={gridOffsetX}
+          setGridOffsetX={setGridOffsetX}
+          gridOffsetY={gridOffsetY}
+          setGridOffsetY={setGridOffsetY}
           showBackground={showBackground}
           setShowBackground={setShowBackground}
           onMeasureScale={() => setMeasuring(true)}

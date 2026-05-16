@@ -23,6 +23,10 @@ interface TopBarProps {
   getStage: () => Konva.Stage | null
   gridSpacing: number
   setGridSpacing: (v: number) => void
+  gridOffsetX: number
+  setGridOffsetX: (v: number) => void
+  gridOffsetY: number
+  setGridOffsetY: (v: number) => void
   showBackground: boolean
   setShowBackground: (v: boolean) => void
   onMeasureScale: () => void
@@ -60,7 +64,7 @@ const btnBase: React.CSSProperties = {
   whiteSpace: 'nowrap',
 }
 
-function NumInput({ value, onChange, width = 70, step = 1, min = 1 }: {
+function NumInput({ value, onChange, width = 70, step = 1, min }: {
   value: number
   onChange: (v: number) => void
   width?: number
@@ -75,7 +79,7 @@ function NumInput({ value, onChange, width = 70, step = 1, min = 1 }: {
       min={min}
       onChange={e => {
         const v = parseFloat(e.target.value)
-        if (v >= min) onChange(v)
+        if (!isNaN(v) && (min === undefined || v >= min)) onChange(v)
       }}
       style={{ ...inputStyle, width }}
     />
@@ -103,6 +107,101 @@ function ToggleBtn({ label, active, onClick }: {
     >
       {label}
     </button>
+  )
+}
+
+function GridMenu({ gridSpacing, setGridSpacing, gridOffsetX, setGridOffsetX, gridOffsetY, setGridOffsetY, showBackground, setShowBackground }: {
+  gridSpacing: number
+  setGridSpacing: (v: number) => void
+  gridOffsetX: number
+  setGridOffsetX: (v: number) => void
+  gridOffsetY: number
+  setGridOffsetY: (v: number) => void
+  showBackground: boolean
+  setShowBackground: (v: boolean) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [manualSpacing, setManualSpacing] = useState(gridSpacing > 0 ? gridSpacing : 20)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (!open) return
+    function handler(e: MouseEvent) {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
+  function applySpacing(v: number) {
+    setGridSpacing(v)
+    if (v > 0) setManualSpacing(v)
+  }
+
+  const label = gridSpacing === 0 ? 'Grid: Off' : `Grid: ${gridSpacing}′`
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex', alignItems: 'center', gap: 8, padding: '5px 12px',
+  }
+  const labelStyle: React.CSSProperties = {
+    color: '#94a3b8', fontSize: 12, whiteSpace: 'nowrap', minWidth: 84, textAlign: 'right',
+  }
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{ ...btnBase, background: open ? '#475569' : '#334155', borderColor: open ? '#64748b' : '#475569' }}
+      >
+        {label} ▾
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: 'calc(100% + 4px)',
+          left: 0,
+          zIndex: 200,
+          background: '#1e293b',
+          border: '1px solid #475569',
+          borderRadius: 8,
+          padding: '8px 0',
+          minWidth: 260,
+          boxShadow: '0 4px 24px rgba(0,0,0,0.5)',
+        }}>
+          <div style={rowStyle}>
+            <span style={labelStyle}>Spacing:</span>
+            <div style={{ display: 'flex', gap: 4 }}>
+              <ToggleBtn label="Off" active={gridSpacing === 0} onClick={() => applySpacing(0)} />
+              <ToggleBtn label="20′" active={gridSpacing === 20} onClick={() => applySpacing(20)} />
+              <ToggleBtn label="25′" active={gridSpacing === 25} onClick={() => applySpacing(25)} />
+            </div>
+          </div>
+          <div style={rowStyle}>
+            <span style={labelStyle}>Manual (ft):</span>
+            <NumInput
+              value={manualSpacing}
+              onChange={v => { setManualSpacing(v); setGridSpacing(v) }}
+              width={68}
+              min={1}
+            />
+          </div>
+          <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '6px 0' }} />
+          <div style={rowStyle}>
+            <span style={labelStyle}>X Offset (ft):</span>
+            <NumInput value={gridOffsetX} onChange={setGridOffsetX} width={68} step={1} />
+          </div>
+          <div style={rowStyle}>
+            <span style={labelStyle}>Y Offset (ft):</span>
+            <NumInput value={gridOffsetY} onChange={setGridOffsetY} width={68} step={1} />
+          </div>
+          <hr style={{ border: 'none', borderTop: '1px solid #334155', margin: '6px 0' }} />
+          <div style={{ ...rowStyle, justifyContent: 'flex-end' }}>
+            <ToggleBtn label="Background" active={showBackground} onClick={() => setShowBackground(!showBackground)} />
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -246,6 +345,8 @@ export function TopBar({
   siteW, siteH, setSiteW, setSiteH,
   onImageUpload, onImageFile, onPageDimsSet, getCanvasAPI, getStage,
   gridSpacing, setGridSpacing,
+  gridOffsetX, setGridOffsetX,
+  gridOffsetY, setGridOffsetY,
   showBackground, setShowBackground,
   onMeasureScale, isMeasuring,
   imageUrl,
@@ -329,19 +430,16 @@ export function TopBar({
         📏 Measure Scale
       </button>
 
-      {/* View toggles */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <span style={{ color: '#64748b', fontSize: 11, whiteSpace: 'nowrap' }}>Grid:</span>
-        {([0, 20, 25] as const).map(v => (
-          <ToggleBtn
-            key={v}
-            label={v === 0 ? 'Off' : `${v}′`}
-            active={gridSpacing === v}
-            onClick={() => setGridSpacing(v)}
-          />
-        ))}
-        <ToggleBtn label="Background" active={showBackground} onClick={() => setShowBackground(!showBackground)} />
-      </div>
+      <GridMenu
+        gridSpacing={gridSpacing}
+        setGridSpacing={setGridSpacing}
+        gridOffsetX={gridOffsetX}
+        setGridOffsetX={setGridOffsetX}
+        gridOffsetY={gridOffsetY}
+        setGridOffsetY={setGridOffsetY}
+        showBackground={showBackground}
+        setShowBackground={setShowBackground}
+      />
 
       <div style={{ flex: 1 }} />
 
